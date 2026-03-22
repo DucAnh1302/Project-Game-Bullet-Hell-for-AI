@@ -1,0 +1,38 @@
+@startuml SequenceDiagram
+actor Player
+participant "GameLoop" as Game
+participant "player : Player" as P1
+participant "enemy : DFSEnemy" as E1
+participant "map : MapLoader" as Map
+
+Game -> Map: load_map("level1.tmx")
+Game -> E1: spawn(x, y)
+
+activate E1
+E1 -> P1: get_position()
+P1 --> E1: (player_x, player_y)
+note right of E1: Đánh dấu đích đến (Marking)\nchỉ 1 lần lúc Spawn
+
+E1 -> Map: get_grid()
+Map --> E1: grid_data (mảng 2D)
+
+E1 -> E1: calculate_dfs_path(start, target, grid_data)
+note right of E1: Tìm đường tránh tường.\nLưu mảng các bước đi vào 'path'
+
+loop Mỗi Frame trong Game
+    Player -> Game: Nhấn WASD
+    Game -> P1: move()
+    
+    Game -> E1: update()
+    E1 -> E1: move_along_path()
+    note right of E1: Di chuyển từng ô dựa\ntrên mảng 'path' đã tính
+    
+    Game -> Game: check_collision(P1, E1)
+    alt Nếu chạm nhau
+        Game -> P1: take_damage()
+    end
+    
+    Game -> Game: draw()
+end
+deactivate E1
+@enduml

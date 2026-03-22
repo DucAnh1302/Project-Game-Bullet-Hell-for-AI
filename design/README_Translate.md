@@ -36,3 +36,12 @@ Kẻ thù đóng vai trò như những viên "đạn" có trí tuệ trong game 
 * **Cấu trúc:** Mê cung dạng lưới (Grid-based). Tường (Wall) là vật cản không thể đi xuyên qua đối với cả người chơi và quái vật.
 * **Tính động (Dynamic):** Cửa ra (Exit) và vị trí bắt đầu (Start) được đặt ngẫu nhiên ở mỗi màn chơi.
 * **Vật phẩm (Items):** Có thể rải rác các vật phẩm hồi máu hoặc vật phẩm mở rộng tầm nhìn tạm thời (Flare/Torch).
+
+# Diagram in Games
+
+## Use Case Diagram (Planned)
+![](../design/Diagram/UseCaseDiagram.jpg)
+## Class Diagram (Planned)
+![](../design/Diagram/ClassDiagram.jpg)
+## Sequence Diagram (Planned)
+![](../design/Diagram/SequenceDiagram.jpg)

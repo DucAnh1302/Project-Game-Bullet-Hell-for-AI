@@ -50,3 +50,13 @@ Enemies act as intelligent "bullets" in Bullet Hell. They move continuously, for
 * **Dynamic:** Exits and starting points are randomly placed in each level.
 
 * **Items:** You can scatter healing items or temporary vision-enhancing items (Flare/Torch).
+
+---
+# Diagram in Games
+
+## Use Case Diagram (Planned)
+![](../design/Diagram/UseCaseDiagram.jpg)
+## Class Diagram (Planned)
+![](../design/Diagram/ClassDiagram.jpg)
+## Sequence Diagram (Planned)
+![](../design/Diagram/SequenceDiagram.jpg)

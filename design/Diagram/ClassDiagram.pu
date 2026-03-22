@@ -1,0 +1,69 @@
+@startuml ClassDiagram
+skinparam classAttributeIconSize 0
+
+package "Presentation Layer (Hiển thị và UI)" {
+    class GameLoop {
+        + is_running: bool
+        + screen: Surface
+        + clock: Clock
+        + run()
+        + handle_events()
+        + update()
+        + draw()
+    }
+    class UIManager {
+        + draw_main_menu()
+        + draw_hud(player_hp)
+        + draw_game_over()
+    }
+}
+
+package "Business Logic Layer (Cơ chế Game)" {
+    abstract class Entity {
+        + x: int
+        + y: int
+        + speed: float
+        + image: Surface
+        + update()
+        + draw(screen)
+    }
+    class Player {
+        + hp: int
+        + fog_radius: int
+        + move(dx, dy)
+        + check_collision()
+    }
+    class Enemy {
+        + target_x: int
+        + target_y: int
+        + damage: int
+        + mark_target(player_x, player_y)
+    }
+    class DFSEnemy {
+        + path: List<Tuple>
+        + calculate_dfs_path(grid)
+        + backtrack()
+        + move_along_path()
+    }
+}
+
+package "Data Layer (Tài nguyên và Map)" {
+    class MapLoader {
+        + tmx_data: TiledMap
+        + grid: int[][]
+        + load_map(filepath)
+        + get_walls()
+        + get_spawn_points()
+    }
+}
+
+GameLoop --> UIManager : Sử dụng
+GameLoop --> MapLoader : Tải map
+GameLoop "1" *-- "1" Player : Quản lý
+GameLoop "1" *-- "*" Enemy : Quản lý
+
+Entity <|-- Player
+Entity <|-- Enemy
+Enemy <|-- DFSEnemy
+DFSEnemy --> MapLoader : Đọc grid để tìm đường DFS
+@enduml
