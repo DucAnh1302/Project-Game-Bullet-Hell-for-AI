@@ -1,0 +1,29 @@
+@startuml UseCaseDiagram
+left to right direction
+skinparam packageStyle rectangle
+actor "Người chơi" as Player
+
+rectangle "Game BulletHell - Tìm Đường Động" {
+  usecase "Mở Menu Chính" as Menu
+  usecase "Cài đặt (Âm thanh/Độ khó)" as Settings
+  usecase "Bắt đầu Game" as Start
+  
+  usecase "Điều khiển (WASD/Phím mũi tên)" as Move
+  usecase "Né quái vật (Đạn)" as Dodge
+  usecase "Sử dụng Vật phẩm (Mở rộng tầm nhìn/Hồi máu)" as Item
+  
+  usecase "Tìm thấy Cửa ra (Win)" as Win
+  usecase "Hết HP (Game Over)" as Lose
+}
+
+Player --> Menu
+Menu --> Settings
+Menu --> Start
+
+Player --> Move
+Player --> Dodge
+Player --> Item
+
+Move .> Win : Dẫn đến
+Dodge .> Lose : Thất bại dẫn đến
+@enduml
