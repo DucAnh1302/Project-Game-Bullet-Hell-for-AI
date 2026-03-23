@@ -10,6 +10,7 @@ class CollisionManager:
         self.tmx_data = tmx_data
         self.scale_factor = scale_factor
         self.walls = self._extract_walls()
+        self.decorations = self._extract_decorations()
 
     def _extract_walls(self):
         """Chỉ lấy các khung va chạm được vẽ tay trong layer 'walls' của Tiled"""
@@ -34,12 +35,36 @@ class CollisionManager:
                         walls.append(rect)
         return walls
 
+#Copy từ đoạn trên, chỉ đổi 'walls' thành 'decorations' để lấy layer decorations
+    def _extract_decorations(self):
+        """Chỉ lấy các khung va chạm được vẽ tay trong layer 'decorations' của Tiled"""
+        decorations = []
+        if not self.tmx_data:
+            return decorations
+        
+        # Duyệt qua các object group trong Tiled
+        for layer in self.tmx_data.objectgroups:
+            if layer.name == 'decorations': # Chỉ lấy layer có tên chính xác là 'decorations'
+                for obj in layer:
+                    if hasattr(obj, 'width') and hasattr(obj, 'height'):
+                        rect = pygame.Rect(
+                            obj.x * self.scale_factor,
+                            obj.y * self.scale_factor,
+                            obj.width * self.scale_factor,
+                            obj.height * self.scale_factor
+                        )
+                        decorations.append(rect)
+        return decorations
+
     def is_colliding(self, future_rect):
         """Nhận vào 1 hitbox và check xem có đụng tường không"""
         # Đức Anh comment lại đoạn dưới cho dễ hiểu nè
         """Nhận vào 1 cái Hitbox (khung chữ nhật dự kiến sẽ bước tới).
-        Trả về True nếu Hitbox đó đụng trúng bất kỳ bức tường nào."""
+        Trả về True nếu Hitbox đó đụng trúng bất kỳ bức tường hoặc đồ vật nào."""
         for wall in self.walls:
             if future_rect.colliderect(wall):
+                return True
+        for decoration in self.decorations:
+            if future_rect.colliderect(decoration):
                 return True
         return False
