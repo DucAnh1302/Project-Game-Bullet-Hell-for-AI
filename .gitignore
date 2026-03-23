@@ -1,0 +1,8 @@
+# Bỏ qua môi trường ảo
+venv/
+src/venv/
+env/
+
+# Bỏ qua các file cache của Python sinh ra lúc chạy code
+__pycache__/
+*.pyc
