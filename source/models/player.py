@@ -17,7 +17,8 @@ class Player(pygame.sprite.Sprite):
         self.velocity_y = 0
         self.speed = 5 # tốc độ di chuyển (pixel/frame)
         self.tile_size = tile_size
-        
+        self.health = 100 # HP của nhân vật, có thể dùng để tính sát thương sau này
+
         # Sprites with scaling
         # Đức Anh: Quản lý hình ảnh thấy đúng hơn á
         self.sprites = {}
@@ -126,3 +127,8 @@ class Player(pygame.sprite.Sprite):
     def draw(self, surface):
         # In hình nhân vật lên màn hình thôi
         surface.blit(self.image, self.rect)
+    
+    def take_damage(self, damage):
+        """Nhận sát thương"""
+        self.health -= damage
+        self.health = max(0, self.health)
