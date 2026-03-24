@@ -1,13 +1,13 @@
 import pygame
 import math
-
+import random
 class BulletEnemy(pygame.sprite.Sprite):
     """
     Kẻ thù hình viên đạn gây sát thương khi chạm vào người chơi.
     Tầng Models: Chỉ chứa dữ liệu, trạng thái (tọa độ, vận tốc, hình dạng) của kẻ thù.
     """
     
-    def __init__(self, x, y, direction_x, direction_y, speed=3, radius=8, damage=10):
+    def __init__(self, x, y, direction_x, direction_y, speed=3, radius=6,damage=10):
         """
         Args:
             x: Tọa độ X ban đầu
@@ -61,26 +61,18 @@ class BulletEnemy(pygame.sprite.Sprite):
         new_x = self.x + self.velocity_x
         new_y = self.y + self.velocity_y
         
-        # Kiểm tra collision với tường khi di chuyển trục X
+        # Cập nhật tạm hitbox để check va chạm tổng thể (cả X và Y)
         collision_rect = self.get_collision_rect()
-        collision_rect.centerx = new_x
+        collision_rect.center = (new_x, new_y)
         
         if self.collision_manager and self.collision_manager.is_colliding(collision_rect):
-            # Nếu va chạm tường, thay đổi hướng ngược lại
-            self.velocity_x *= -1
-        else:
-            self.x = new_x
-        
-        # Kiểm tra collision với tường khi di chuyển trục Y
-        collision_rect.centery = new_y
-        
-        if self.collision_manager and self.collision_manager.is_colliding(collision_rect):
-            # Nếu va chạm tường, thay đổi hướng ngược lại
-            self.velocity_y *= -1
-        else:
-            self.y = new_y
-        
-        # Cập nhật vị trí rect
+            # Nếu viên đạn chạm tường -> tự hủy luôn!
+            self.kill()
+            return # Cực kỳ quan trọng: Thoát hàm ngay để không chạy các dòng dưới
+            
+        # Nếu không chạm tường thì cập nhật vị trí mới
+        self.x = new_x
+        self.y = new_y
         self.rect.center = (self.x, self.y)
     
     def get_collision_rect(self):
@@ -106,7 +98,7 @@ class BulletEnemy(pygame.sprite.Sprite):
         return bullet_rect.colliderect(player_rect)
     
     def set_collision_manager(self, collision_manager):
-        """Set collision manager từ GameLoop"""
+        """Nhận hệ thống quản lý va chạm từ bên ngoài truyền vào"""
         self.collision_manager = collision_manager
     
     def is_out_of_bounds(self, screen_width, screen_height):
@@ -117,6 +109,7 @@ class BulletEnemy(pygame.sprite.Sprite):
                 self.y > screen_height + self.radius)
 
 
+#Tạm thời không dùng tới
 class BulletEnemySpawner:
     """
     Quản lý việc tạo ra các viên đạn theo thời gian.
@@ -127,6 +120,11 @@ class BulletEnemySpawner:
         self.enemies = pygame.sprite.Group()
         self.spawn_timer = 0
         self.spawn_interval = 30  # Tạo viên đạn mỗi 30 frame
+
+    def create_bullet(self, x, y, dir_x, dir_y, speed=3, radius=8, damage=10):
+        bullet = BulletEnemy(x, y, dir_x, dir_y, speed=speed, radius=radius, damage=damage)
+        self.enemies.add(bullet)
+        return bullet
     
     def update(self, spawn_positions=None):
         """
@@ -158,3 +156,59 @@ class BulletEnemySpawner:
     def clear_all(self):
         """Xóa tất cả viên đạn"""
         self.enemies.empty()
+
+
+class PathfindingEnemy(BulletEnemy):
+    def __init__(self, x, y, pathfinder, speed=2):
+        super().__init__(x, y, 0, 0, speed)
+        self.pathfinder = pathfinder
+        self.path = []
+        self.target_node_index = 0
+        self.current_destination = None
+
+    def set_random_target(self, max_width, max_height, tile_size=32):
+        """Chọn đích đến là một ô ngẫu nhiên Ở TRONG MÀN HÌNH VÀ MÊ CUNG"""
+        while True:
+            # Chọn tọa độ tx, ty cách mép ngoài 1 chút (tránh lỗi mép viền)
+            tx = random.randint(1, (max_width // tile_size) - 2) * tile_size
+            ty = random.randint(1, (max_height // tile_size) - 2) * tile_size
+            
+            # Tạo hitbox ảo để check xem ô này có bị kẹt trong tường không
+            test_rect = pygame.Rect(tx, ty, tile_size, tile_size)
+            
+            # Nếu KHÔNG va chạm tường -> ô trống hợp lệ -> Thoát vòng lặp
+            if not self.pathfinder.collision_manager.is_colliding(test_rect):
+                break 
+                
+        # Bắt đầu tìm đường từ vị trí hiện tại đến đích hợp lệ vừa tìm được
+        self.path = self.pathfinder.get_path((self.x, self.y), (tx, ty))
+        self.target_node_index = 0
+        
+        if self.path:
+            self.current_destination = self.path[0]
+        else:
+            self.current_destination = None
+
+    def update(self):
+        """Cập nhật logic và Xóa Enemy (biến mất) khi chạm đích"""
+        if not self.current_destination:
+            self.kill() # Lệnh này của pygame sẽ xóa obj khỏi Sprite Group
+            return
+
+        # Tính toán di chuyển về đích hiện tại
+        dx = self.current_destination[0] - self.x
+        dy = self.current_destination[1] - self.y
+        distance = math.sqrt(dx**2 + dy**2)
+
+        if distance < self.speed:
+            self.target_node_index += 1
+            if self.target_node_index < len(self.path):
+                self.current_destination = self.path[self.target_node_index]
+            else:
+                self.current_destination = None # Đã chạm đích cuối
+                self.kill() # Biến mất
+        else:
+            # Di chuyển từng frame
+            self.x += (dx / distance) * self.speed
+            self.y += (dy / distance) * self.speed
+            self.rect.center = (self.x, self.y)
