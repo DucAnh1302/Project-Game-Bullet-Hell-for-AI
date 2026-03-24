@@ -37,8 +37,15 @@ class GameLoop:
         # Khởi tạo BLL Quản lý va chạm trước
         scale_factor = self.map_loader.scale_x # biết được map phóng to nhiều lần để scale_x lên á
         self.collision_manager = CollisionManager(self.map_loader.tmx_data, scale_factor)
-        self.pathfinder = DFSPathfinder(self.collision_manager, tile_size=32) # tile_size theo chuẩn map là 32x32 pixel 
         
+        # --- FIX BUG: TÍNH KÍCH THƯỚC Ô GẠCH THỰC TẾ TRÊN MÀN HÌNH ---
+        # Map gốc là 16px. Phải nhân với scale_factor để ra kích thước đã phóng to
+        self.scaled_tile_size = int(16 * scale_factor)
+
+        # Đức Anh lưu ý: mà Ngân để 32x32 pixel
+        # self.pathfinder = DFSPathfinder(self.collision_manager, tile_size=32) # tile_size theo chuẩn map là 32x32 pixel 
+        self.pathfinder = DFSPathfinder(self.collision_manager, tile_size=self.scaled_tile_size)
+
         # Tầng models: Khởi tạo Player và bơm BLL vào cho nó
         self.player = Player(120, 120, self.assets_path) # Spawn ở tọa độ (120, 120) cho an toàn
         self.player.set_collision_manager(self.collision_manager)
@@ -75,7 +82,9 @@ class GameLoop:
 
     def spawn_random_enemy(self):
         """Spawn enemy ở vị trí hợp lệ TRONG KHUNG MÀN HÌNH"""
-        tile_size = 32
+        # ile_size = 32
+        # --- FIX BUG: Sử dụng scaled_tile_size thay vì số 32 cố định ---
+        tile_size = self.scaled_tile_size
         spawn_x, spawn_y = None, None
         
         # Giới hạn vùng tìm kiếm bằng đúng kích thước cửa sổ game (800x600)
@@ -85,11 +94,12 @@ class GameLoop:
         
         for _ in range(500):
             # Chọn ô grid nằm trong màn hình hiển thị (từ ô số 1 để tránh sát viền)
-            #tx = random.randint(1, max_x)
-            #ty = random.randint(1, max_y)
-            #Đang lấy vị trí cố định để test, sau này đổi lại random nhé
-            tx=2
-            ty=2
+            tx = random.randint(1, max_x)
+            ty = random.randint(1, max_y)
+            # Đổi lại random cho Ngân rồi á
+            # Đang lấy vị trí cố định để test, sau này đổi lại random nhé
+            # tx=2
+            # ty=2
             # Kiểm tra xem ô đó có hợp lệ (không dính tường) không
             if self.pathfinder._is_valid((tx, ty)):
                 spawn_x = tx * tile_size
@@ -106,7 +116,8 @@ class GameLoop:
         new_enemy.set_collision_manager(self.collision_manager)
         
         # Truyền luôn SCREEN_WIDTH và SCREEN_HEIGHT để Enemy tìm đích đến trong màn hình
-        new_enemy.set_random_target( self.SCREEN_WIDTH, self.SCREEN_HEIGHT, 32)
+        # new_enemy.set_random_target( self.SCREEN_WIDTH, self.SCREEN_HEIGHT, 32)
+        new_enemy.set_random_target( self.SCREEN_WIDTH, self.SCREEN_HEIGHT, tile_size)
         
         self.enemy_group.add(new_enemy)
 
