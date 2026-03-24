@@ -52,7 +52,10 @@ class GameLoop:
 
         # Tầng models: Khởi tạo Enemy và bơm BLL vào cho nó
         self.enemy_group = pygame.sprite.Group() # Tạo nhóm để quản lý nhiều Enemy sau này
-        self.spawn_random_enemy() # Spawn Enemy đầu tiên
+        # self.spawn_random_enemy() # Spawn Enemy đầu tiên
+        # Làm 4 viên đạn cho nó thú vị
+        for i in range(4):
+            self.spawn_random_enemy()
 
         # Khởi tạo Bullet Spawner
         #self.bullet_spawner = BulletEnemySpawner()
@@ -126,7 +129,13 @@ class GameLoop:
         self.player.update(self.SCREEN_WIDTH, self.SCREEN_HEIGHT)
         # Cập nhật Enemy di chuyển theo đường đã tìm
         self.enemy_group.update()
-        if len(self.enemy_group) == 0:
+
+        # Dòng if này là nếu đạn chết hết, đạn mới spawn mà
+        # if len(self.enemy_group) == 0:
+        #    self.spawn_random_enemy()
+
+        # Để vòng while, khi bé hơn số lượng mình muốn thì spawn ra
+        while len(self.enemy_group) < 4:
             self.spawn_random_enemy()
 
         # Quản lý thời gian spawn đạn
