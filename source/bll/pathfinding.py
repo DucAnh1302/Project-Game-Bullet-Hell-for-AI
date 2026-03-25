@@ -1,6 +1,7 @@
 # nơi sẽ chứa logic DFS
 import random
 import pygame
+import heapq
 
 class DFSPathfinder:
     def __init__(self, collision_manager, tile_size=32):
@@ -80,6 +81,95 @@ class DFSPathfinder:
         return pixel_path
     def _is_valid(self, node):
         """Kiểm tra xem ô (node) có hợp lệ không (trong bounds và không dính tường)"""
+        if node[0] < 0 or node[1] < 0:
+            return False
+        if hasattr(self.collision_manager, 'tmx_data') and self.collision_manager.tmx_data:
+            w = getattr(self.collision_manager.tmx_data, 'width', 999999)
+            h = getattr(self.collision_manager.tmx_data, 'height', 999999)
+            if node[0] >= w or node[1] >= h:
+                return False
+        rect = pygame.Rect(node[0] * self.tile_size, node[1] * self.tile_size, self.tile_size, self.tile_size)
+        return not self.collision_manager.is_colliding(rect)
+
+class AStarPathfinder:
+    def __init__(self, collision_manager, tile_size=32):
+        self.collision_manager = collision_manager
+        self.tile_size = tile_size
+
+    def heuristic(self, a, b):
+        """Hàm khoảng cách Manhattan để tính toán chi phí ước tính đến đích"""
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    def get_path(self, start_pos, target_pos):
+        """Tìm đường đi ngắn nhất từ start_pos đến target_pos bằng thuật toán A*"""
+        start_node = (int(start_pos[0] // self.tile_size), int(start_pos[1] // self.tile_size))
+        target_node = (int(target_pos[0] // self.tile_size), int(target_pos[1] // self.tile_size))
+
+        # Priority queue để lưu trữ các node cần xét (f_score, (x, y))
+        open_set = []
+        heapq.heappush(open_set, (0, start_node))
+        
+        # Dùng để truy vết đường đi
+        came_from = {}
+        
+        # Chi phí đi từ start_node tới một node hiện tại
+        g_score = {start_node: 0}
+        
+        # Chi phí dự kiến từ start_node qua node hiện tại để tới target_node (f = g + h)
+        f_score = {start_node: self.heuristic(start_node, target_node)}
+
+        while open_set:
+            # Lấy ra node có f_score thấp nhất (chi phí tổng dự kiến nhỏ nhất)
+            current_f, current = heapq.heappop(open_set)
+
+            # Nếu chạm đích, truy vết lại đường đi và thoát
+            if current == target_node:
+                return self.reconstruct_path(came_from, current)
+
+            neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+            
+            for dx, dy in neighbors:
+                neighbor = (current[0] + dx, current[1] + dy)
+                
+                # Kiểm tra va chạm với tường và ranh giới map
+                if not self._is_valid(neighbor):
+                    continue
+                    
+                # Khoảng cách giữa các ô lưới kề nhau mặc định là 1
+                tentative_g_score = g_score[current] + 1
+
+                # Nếu tìm được đường ngắn hơn để đến node hàng xóm này
+                if tentative_g_score < g_score.get(neighbor, float('inf')):
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g_score
+                    f_score[neighbor] = tentative_g_score + self.heuristic(neighbor, target_node)
+                    
+                    # Đưa hàng xóm vào hàng đợi ưu tiên để duyệt tiếp
+                    heapq.heappush(open_set, (f_score[neighbor], neighbor))
+
+        # Nếu không có đường đi (bị chặn toàn bộ), trả về list rỗng
+        return []
+
+    def reconstruct_path(self, came_from, current):
+        """Hàm phụ trợ để dựng lại mảng đường đi theo đúng thứ tự (từ start -> đích)"""
+        total_path = [current]
+        while current in came_from:
+            current = came_from[current]
+            total_path.append(current)
+            
+        total_path.reverse() # A* truy vết từ đích ngược về nguồn nên cần đảo mảng lại
+        
+        # Chuyển đổi Grid sang tọa độ Pixel (tâm của ô)
+        pixel_path = []
+        for node in total_path:
+            px = node[0] * self.tile_size + self.tile_size // 2
+            py = node[1] * self.tile_size + self.tile_size // 2
+            pixel_path.append((px, py))
+            
+        return pixel_path
+
+    def _is_valid(self, node):
+        """Sử dụng chung hàm kiểm tra va chạm giống y hệt DFSPathfinder"""
         if node[0] < 0 or node[1] < 0:
             return False
         if hasattr(self.collision_manager, 'tmx_data') and self.collision_manager.tmx_data:
