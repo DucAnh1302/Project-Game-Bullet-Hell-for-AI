@@ -5,12 +5,14 @@ import random
 # Import các Layer đúng chuẩn Kiến trúc 3 Lớp (3-Tier)
 from data.map_loader import MapLoader # Tầng data: load file TMX á
 from data.score_dal import ScoreDAL
+from presentation.ui_manager import UIManager
 from models.player import Player # tầng bll: Logic của game mình á
 from models.enemy import PathfindingEnemy, BulletEnemySpawner
 from models.exit_door import ExitDoor
 from models.magic_eye import MagicEye
 from bll.collision_manager import CollisionManager # tầng models: Nhân vật của mình á
 from bll.pathfinding import DFSPathfinder
+
 class GameLoop:
     def __init__(self):
         """
@@ -54,27 +56,14 @@ class GameLoop:
         score_file_path = os.path.join(self.base_dir, 'highscore.txt')
         self.score_dal = ScoreDAL(score_file_path)
 
-        # BIẾN QUẢN LÝ TRẠNG THÁI GAME
-        self.state = "PLAYING" # Các trạng thái: "PLAYING", "GAME_OVER", "WIN"
-        
-        # TẢI HÌNH ẢNH NÚT RETRY (Cross-platform)
-        try:
-            # Dùng os.path.join sẽ tự động nhận diện hệ điều hành để ghép đường dẫn chuẩn
-            btn_path = os.path.join(self.assets_path, 'Buttons', 'playButton.png') 
-            self.retry_btn_image = pygame.image.load(btn_path).convert_alpha()
+        # KHỞI TẠO QUẢN LÝ GIAO DIỆN
+        self.ui_manager = UIManager(self.SCREEN_WIDTH, self.SCREEN_HEIGHT, self.assets_path)
             
-            # Ép size lại nhé (Ví dụ ép về 150x50) nếu cái ảnh retry nó sao
-            self.retry_btn_image = pygame.transform.scale(self.retry_btn_image, (150, 50))
-            
-        except Exception as e:
-            print(f"Không tìm thấy ảnh nút: {e}. Đang dùng nút dự phòng.")
-            self.retry_btn_image = pygame.Surface((150, 50))
-            self.retry_btn_image.fill((100, 100, 100))
-            
-        self.retry_btn_rect = self.retry_btn_image.get_rect()
-
         # GỌI HÀM RESET ĐỂ SETUP NHÂN VẬT, VẬT PHẨM VÀ ĐỒNG HỒ
         self.reset_game()
+
+        # SỬA TRẠNG THÁI MẶC ĐỊNH THÀNH START MENU để chặn game ở menu chính
+        self.state = "START" # Các trạng thái: "PLAYING", "GAME_OVER", "WIN"
 
     def reset_game(self):
         """Khôi phục lại toàn bộ trạng thái ban đầu để Chơi lại (Restart)"""
@@ -108,11 +97,11 @@ class GameLoop:
             if event.type == pygame.QUIT:
                 self.is_running = False
 
-            # Xử lý CLICK CHUỘT TRÁI vào nút Retry
+            # Xử lý CLICK CHUỘT TRÁI vào nút Play/Retry
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if self.state in ["GAME_OVER", "WIN"]:
-                    # Lấy tọa độ chuột event.pos và check xem có đâm trúng hitbox của nút không
-                    if hasattr(self, 'retry_btn_rect') and self.retry_btn_rect.collidepoint(event.pos):
+                if self.state in ["START", "GAME_OVER", "WIN"]:
+                    # Nhờ UI Manager check xem chuột có click trúng nút không
+                    if self.ui_manager.btn_rect.collidepoint(event.pos):
                         self.reset_game()
 
             # Xử lý phím khi đang ở màn hình GAME OVER hoặc WIN
@@ -270,66 +259,15 @@ class GameLoop:
             # Chế độ thường: Kéo cuộn phim theo góc nhìn của Thỏ
             self.screen.blit(self.virtual_surface, (-self.camera_x, -self.camera_y))
 
-        # Vẽ máu và chốt khung hình
-        self._draw_health()
-
-        # VẼ MÀN HÌNH WIN / GAME OVER ĐÈ LÊN TRÊN CÙNG
-        if self.state != "PLAYING":
-            # Tạo một tấm kính mờ màu đen phủ lên màn hình
-            overlay = pygame.Surface((self.SCREEN_WIDTH, self.SCREEN_HEIGHT), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 180)) # Độ mờ 180/255
-            self.screen.blit(overlay, (0, 0))
-            
-            # Setup Font chữ (Dùng SysFont Times New Roman để hỗ trợ Tiếng Việt)
-            title_font = pygame.font.SysFont('Times New Roman', 80, bold=True)
-            info_font = pygame.font.SysFont('Times New Roman', 30) # Để font 30 cho chữ nhỏ lại xíu cho sang
-            
-            if self.state == "GAME_OVER":
-                title_text = title_font.render("GAME OVER", True, (255, 50, 50)) # Chữ đỏ
-                msg_text = info_font.render("Bạn đã bị đạn ma thuật bắn hạ!", True, (200, 200, 200))
-            else: # WIN
-                title_text = title_font.render("YOU WIN!", True, (50, 255, 50)) # Chữ xanh lá
-                msg_text = info_font.render(f"Thời gian thoát: {self.elapsed_time:.2f}s", True, (200, 200, 200))
-
-            instruction_text = info_font.render("Hoặc nhấn [ESC] để thoát", True, (150, 150, 150))
-            
-            # --- CĂN CHỈNH TỌA ĐỘ Y DÀN ĐỀU TỪ TRÊN XUỐNG DƯỚI ---
-            title_y = self.SCREEN_HEIGHT // 2 - 120
-            msg_y = self.SCREEN_HEIGHT // 2 - 40
-            btn_y = self.SCREEN_HEIGHT // 2 + 40
-            inst_y = self.SCREEN_HEIGHT // 2 + 110
-
-            # Căn giữa các dòng chữ
-            self.screen.blit(title_text, (self.SCREEN_WIDTH//2 - title_text.get_width()//2, title_y))
-            self.screen.blit(msg_text, (self.SCREEN_WIDTH//2 - msg_text.get_width()//2, msg_y))
-            
-            # VẼ NÚT RETRY
-            self.retry_btn_rect.centerx = self.SCREEN_WIDTH // 2
-            self.retry_btn_rect.centery = btn_y
-            self.screen.blit(self.retry_btn_image, self.retry_btn_rect)
-
-            # Vẽ chữ hướng dẫn ESC
-            self.screen.blit(instruction_text, (self.SCREEN_WIDTH//2 - instruction_text.get_width()//2, inst_y))
+        # GỌI UI_MANAGER RA VẼ GIAO DIỆN
+        if self.state == "PLAYING":
+            # Chỉ vẽ máu và đồng hồ khi đang chơi
+            self.ui_manager.draw_hud(self.screen, self.player.health, self.elapsed_time, self.best_time)
+        else:
+            # Nếu đang ở Menu Start, Thua, hoặc Thắng THÌ Vẽ màn hình Overlay
+            self.ui_manager.draw_overlay_screen(self.screen, self.state, self.elapsed_time)
 
         pygame.display.flip()
-
-    def _draw_health(self):
-        font = pygame.font.SysFont('Times New Roman', 36)
-        
-        # Vẽ Máu (Bên trái)
-        health_text = f"HP: {self.player.health if hasattr(self.player, 'health') else 0}/100"
-        text_surface = font.render(health_text, True, (255, 50, 50))
-        self.screen.blit(text_surface, (10, 10))
-        
-        # Vẽ Đồng hồ & Kỷ lục (Bên phải)
-        if self.best_time == float('inf'):
-            time_text = f"Time: {self.elapsed_time:.1f}s | Best: --"
-        else:
-            time_text = f"Time: {self.elapsed_time:.1f}s | Best: {self.best_time:.1f}s"
-            
-        time_surface = font.render(time_text, True, (255, 255, 255))
-        # Căn lề phải: Chiều rộng màn hình - chiều rộng chữ - lề 20px
-        self.screen.blit(time_surface, (self.SCREEN_WIDTH - time_surface.get_width() - 20, 10))
 
     # vòng lặp vĩnh cữu cho game á
     def run(self):
