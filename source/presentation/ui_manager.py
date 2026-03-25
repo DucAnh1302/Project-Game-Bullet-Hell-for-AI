@@ -86,7 +86,7 @@ class UIManager:
             title_text = self.font_title.render("PAUSED", True, (255, 255, 255))
             msg_text = self.font_info.render("Game dang tam dung", True, (200, 200, 200))
 
-        inst_text = self.font_info.render("Hoac nhan [ESC] de thoat", True, (150, 150, 150))
+        inst_text = self.font_info.render("Nhan [ESC] de tam dung", True, (150, 150, 150))
 
         # Căn chỉnh Y
         title_y = self.height // 2 - 120
