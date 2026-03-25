@@ -2,6 +2,7 @@ import pygame
 import os
 import sys
 import random
+import asyncio
 # Import các Layer đúng chuẩn Kiến trúc 3 Lớp (3-Tier)
 from data.map_loader import MapLoader # Tầng data: load file TMX á
 from data.score_dal import ScoreDAL
@@ -290,15 +291,27 @@ class GameLoop:
         pygame.display.flip()
 
     # vòng lặp vĩnh cữu cho game á
-    def run(self):
+    # để chơi online được nên thêm thư viện pybag
+    async def run(self):
         while self.is_running:
             self.handle_events() # xử lý nhập WASD hay mũi tên nè
             self.update() # Tính toán logic
             self.draw() # cập nhật hình ảnh
             self.clock.tick(60) # 60 pfs nè
-            
+            await asyncio.sleep(0) # Dòng này để code chạy trên web
+           
         pygame.quit()
         sys.exit()
+
+    #def run(self):
+    #    while self.is_running:
+    #        self.handle_events() # xử lý nhập WASD hay mũi tên nè
+    #        self.update() # Tính toán logic
+    #        self.draw() # cập nhật hình ảnh
+    #        self.clock.tick(60) # 60 pfs nè
+    #        
+    #    pygame.quit()
+    #    sys.exit()
 
     def spawn_exit_door(self):
         """Sinh Cửa Thoát Hiểm ở một vị trí ngẫu nhiên trên toàn Map"""

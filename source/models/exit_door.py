@@ -13,7 +13,8 @@ class ExitDoor(pygame.sprite.Sprite):
         self.image.fill((255, 215, 0)) # Màu Vàng Gold
         
         # Có thể thêm dòng chữ "EXIT" lên cửa cho sinh động
-        font = pygame.font.SysFont(None, int(self.size * 0.5))
+        #font = pygame.font.SysFont(None, int(self.size * 0.5))
+        font = pygame.font.Font(None, 16)
         text = font.render("EXIT", True, (0, 0, 0))
         text_rect = text.get_rect(center=(self.size//2, self.size//2))
         self.image.blit(text, text_rect)

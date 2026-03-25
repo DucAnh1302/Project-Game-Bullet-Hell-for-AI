@@ -12,10 +12,15 @@ class UIManager:
         self.height = screen_height
         
         # Setup sẵn các Font chữ dùng chung
-        self.font_hud = pygame.font.SysFont('Times New Roman', 36)
-        self.font_title = pygame.font.SysFont('Times New Roman', 80, bold=True)
-        self.font_info = pygame.font.SysFont('Times New Roman', 30)
+        #self.font_hud = pygame.font.SysFont('Times New Roman', 36)
+        #self.font_title = pygame.font.SysFont('Times New Roman', 80, bold=True)
+        #self.font_info = pygame.font.SysFont('Times New Roman', 30)
 
+        self.font_hud = pygame.font.Font(None, 36)
+        self.font_title = pygame.font.Font(None, 80)
+        self.font_title.set_bold(True)
+        self.font_info = pygame.font.Font(None, 30)
+        
         # Tải hình ảnh nút bấm
         btn_path = os.path.join(assets_path, 'Buttons', 'playButton.png')
         try:
@@ -53,15 +58,15 @@ class UIManager:
         # Xác định nội dung theo trạng thái
         if state == "START":
             title_text = self.font_title.render("BULLET HELL", True, (0, 255, 255))
-            msg_text = self.font_info.render("Dùng WASD để né đạn và tìm Cửa Thoát Hiểm!", True, (200, 200, 200))
+            msg_text = self.font_info.render("Dung WASD de ne dan va tim Cua Thoat Hiem!", True, (200, 200, 200))
         elif state == "GAME_OVER":
             title_text = self.font_title.render("GAME OVER", True, (255, 50, 50))
-            msg_text = self.font_info.render("Bạn đã bị đạn ma thuật bắn hạ!", True, (200, 200, 200))
+            msg_text = self.font_info.render("Ban da bi dan ma thuat ban ha!", True, (200, 200, 200))
         elif state == "WIN":
             title_text = self.font_title.render("YOU WIN!", True, (50, 255, 50))
-            msg_text = self.font_info.render(f"Thời gian thoát: {elapsed_time:.2f}s", True, (200, 200, 200))
+            msg_text = self.font_info.render(f"Thoi gian thoat: {elapsed_time:.2f}s", True, (200, 200, 200))
 
-        inst_text = self.font_info.render("Hoặc nhấn [ESC] để thoát", True, (150, 150, 150))
+        inst_text = self.font_info.render("Hoac nhan [ESC] de thoat", True, (150, 150, 150))
 
         # Căn chỉnh Y
         title_y = self.height // 2 - 120
