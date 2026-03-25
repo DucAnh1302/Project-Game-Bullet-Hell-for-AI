@@ -159,8 +159,10 @@ class BulletEnemySpawner:
 
 
 class PathfindingEnemy(BulletEnemy):
-    def __init__(self, x, y, pathfinder, speed=2):
-        super().__init__(x, y, 0, 0, speed)
+    # Thêm radius=6 vào tham số
+    def __init__(self, x, y, pathfinder, speed=2, radius=6):
+        # Thêm radius để xử lý việc vẽ hình tròn
+        super().__init__(x, y, 0, 0, speed,radius=radius)
         self.pathfinder = pathfinder
         self.path = []
         self.target_node_index = 0

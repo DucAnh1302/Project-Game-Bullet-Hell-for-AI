@@ -3,13 +3,8 @@ import pytmx
 import os
 
 
-class Tile(pygame.sprite.Sprite):
-    """Represents a single tile from the TMX map."""
-    def __init__(self, image, x, y):
-        super().__init__()
-        self.image = image
-        self.rect = self.image.get_rect()
-        self.rect.topleft = (x, y)
+# gọi class tile bên map
+from models.map import Tile
 
 
 class MapLoader:

@@ -7,7 +7,7 @@ class Player(pygame.sprite.Sprite):
     Các tính toán logic phức tạp sẽ nhờ BLL làm giúp.
     """
     
-    def __init__(self, x, y, assets_path, tile_size=16):
+    def __init__(self, x, y, assets_path, tile_size=16, scale=1.0):
         super().__init__()
         # Đức Anh: Tọa độ thực tế của người chơi trên màn hình
         self.x = x
@@ -15,7 +15,11 @@ class Player(pygame.sprite.Sprite):
         # Đức Anh: Vận tốc di chuyển theo trục X và Y
         self.velocity_x = 0
         self.velocity_y = 0
-        self.speed = 5 # tốc độ di chuyển (pixel/frame)
+        # Thêm thuộc tính scale
+        self.scale = scale
+        # Tốc độ cũng phải nhân với scale, map to x2 thì chạy phải nhanh x2 mới mượt
+        #self.speed = 5 # tốc độ di chuyển (pixel/frame)
+        self.speed = int(5 * self.scale)
         self.tile_size = tile_size
         self.health = 100 # HP của nhân vật, có thể dùng để tính sát thương sau này
 
@@ -23,7 +27,7 @@ class Player(pygame.sprite.Sprite):
         # Đức Anh: Quản lý hình ảnh thấy đúng hơn á
         self.sprites = {}
         self.current_direction = 'down'
-        self.scale = 1  # Kích thước thỏ chuẩn # đại khái là chuẩn 1:1 nhé
+        #self.scale = 1  # Kích thước thỏ chuẩn # đại khái là chuẩn 1:1 nhé
         self.load_sprites(assets_path)
         
         # Thiết lập down khi mới vào game
@@ -115,10 +119,11 @@ class Player(pygame.sprite.Sprite):
         # Trượt theo trục Y
         if self._check_move(self.x, self.y + self.velocity_y):
             self.y += self.velocity_y
-            
+
+        # vì CollisionManager đã chặn tường map rồi nên khỏi chặng biên nữa 
         # Chặn biên màn hình
-        self.x = max(0, min(self.x, screen_width - self.rect.width))
-        self.y = max(0, min(self.y, screen_height - self.rect.height))
+        # self.x = max(0, min(self.x, screen_width - self.rect.width))
+        # self.y = max(0, min(self.y, screen_height - self.rect.height))
         
         # Cập nhật lại ảnh quay mặt theo hướng di chuyển
         self.image = self.sprites.get(self.current_direction, self.sprites['down'])

@@ -6,6 +6,7 @@ import random
 from data.map_loader import MapLoader # Tầng data: load file TMX á
 from models.player import Player # tầng bll: Logic của game mình á
 from models.enemy import PathfindingEnemy, BulletEnemySpawner
+from models.exit_door import ExitDoor
 from bll.collision_manager import CollisionManager # tầng models: Nhân vật của mình á
 from bll.pathfinding import DFSPathfinder
 class GameLoop:
@@ -31,16 +32,31 @@ class GameLoop:
 
         # tầng data nè, tải dữ liệu cho Map và tự động phóng to
         self.map_loader = MapLoader(self.SCREEN_WIDTH, self.SCREEN_HEIGHT)
-        self.map_loader.load_map(self.map_path, scale_to_fit=True)
+        #self.map_loader.load_map(self.map_path, scale_to_fit=True)
+        # tắt scale_to_fit đi để làm camera đi theo player
+        # ép map to ra (ví dụ zoom 2.0)
+        self.zoom = 2.0 
+        self.map_loader.load_map(self.map_path, scale_to_fit=False)
+        self.map_loader.set_zoom(self.zoom)
 
         # LIÊN KẾT BLL VÀ MODELS
         # Khởi tạo BLL Quản lý va chạm trước
-        scale_factor = self.map_loader.scale_x # biết được map phóng to nhiều lần để scale_x lên á
-        self.collision_manager = CollisionManager(self.map_loader.tmx_data, scale_factor)
+        #scale_factor = self.map_loader.scale_x # biết được map phóng to nhiều lần để scale_x lên á
+        #self.collision_manager = CollisionManager(self.map_loader.tmx_data, scale_factor)
         
+        # Lấy scale_factor từ map
+        scale_factor = self.map_loader.scale_x * self.map_loader.zoom_level
+        self.collision_manager = CollisionManager(self.map_loader.tmx_data, scale_factor)
+        self.scaled_tile_size = int(16 * scale_factor)
+        self.pathfinder = DFSPathfinder(self.collision_manager, tile_size=self.scaled_tile_size) 
+        
+        # TRUYỀN SCALE CHO THỎ
+        self.player = Player(120, 120, self.assets_path, scale=scale_factor)
+        self.player.set_collision_manager(self.collision_manager)
+
         # --- FIX BUG: TÍNH KÍCH THƯỚC Ô GẠCH THỰC TẾ TRÊN MÀN HÌNH ---
         # Map gốc là 16px. Phải nhân với scale_factor để ra kích thước đã phóng to
-        self.scaled_tile_size = int(16 * scale_factor)
+        #self.scaled_tile_size = int(16 * scale_factor)
 
         # Đức Anh lưu ý: mà Ngân để 32x32 pixel
         # self.pathfinder = DFSPathfinder(self.collision_manager, tile_size=32) # tile_size theo chuẩn map là 32x32 pixel 
@@ -63,8 +79,14 @@ class GameLoop:
         #self.bullet_spawn_interval = 300  # 5 giây ở 60 FPS
 
         # zoom camera chắc em biết rồi á
-        self.zoom = 1.0
-        self.zoom_step = 0.1
+        #self.zoom = 1.0
+        #self.zoom_step = 0.1
+        
+        # THÊM MỚI Ở ĐÂY: Biến lưu tọa độ của Camera
+        self.camera_x = 0
+        self.camera_y = 0
+
+        self.spawn_exit_door()
 
     def handle_events(self):
         """Xử lý các sự kiện click, gõ phím của người dùng"""
@@ -90,11 +112,17 @@ class GameLoop:
         tile_size = self.scaled_tile_size
         spawn_x, spawn_y = None, None
         
+        # Lấy kích thước thật của toàn bộ Map (không bị giới hạn bởi 800x600 nữa)
+        map_width = self.map_loader.tmx_data.width * tile_size
+        map_height = self.map_loader.tmx_data.height * tile_size
+
         # Giới hạn vùng tìm kiếm bằng đúng kích thước cửa sổ game (800x600)
         # Cộng trừ thêm padding để Enemy không dính mép màn hình
-        max_x = (self.SCREEN_WIDTH // tile_size) - 2
-        max_y = (self.SCREEN_HEIGHT // tile_size) - 2
-        
+        #max_x = (self.SCREEN_WIDTH // tile_size) - 2
+        #max_y = (self.SCREEN_HEIGHT // tile_size) - 2
+        max_x = (map_width // tile_size) - 2
+        max_y = (map_height // tile_size) - 2
+
         for _ in range(500):
             # Chọn ô grid nằm trong màn hình hiển thị (từ ô số 1 để tránh sát viền)
             tx = random.randint(1, max_x)
@@ -115,18 +143,35 @@ class GameLoop:
             spawn_y = 300 
         
         # Khởi tạo Enemy mới
-        new_enemy = PathfindingEnemy(spawn_x, spawn_y, self.pathfinder, speed=2)
-        new_enemy.set_collision_manager(self.collision_manager)
+        #new_enemy = PathfindingEnemy(spawn_x, spawn_y, self.pathfinder, speed=2)
+        #new_enemy.set_collision_manager(self.collision_manager)
         
+        # Tính toán độ to và tốc độ của viên đạn theo Map
+        scale_factor = self.map_loader.scale_x * self.map_loader.zoom_level
+        scaled_speed = int(2 * scale_factor)
+        scaled_radius = int(6 * scale_factor)
+        
+        # Khởi tạo Enemy với độ to mới
+        new_enemy = PathfindingEnemy(spawn_x, spawn_y, self.pathfinder, speed=scaled_speed, radius=scaled_radius)
+        new_enemy.set_collision_manager(self.collision_manager)
+
+
         # Truyền luôn SCREEN_WIDTH và SCREEN_HEIGHT để Enemy tìm đích đến trong màn hình
         # new_enemy.set_random_target( self.SCREEN_WIDTH, self.SCREEN_HEIGHT, 32)
-        new_enemy.set_random_target( self.SCREEN_WIDTH, self.SCREEN_HEIGHT, tile_size)
+        #new_enemy.set_random_target( self.SCREEN_WIDTH, self.SCREEN_HEIGHT, tile_size)
+        new_enemy.set_random_target(map_width, map_height, tile_size)
         
         self.enemy_group.add(new_enemy)
 
     def update(self):
         """Gọi hàm update của tất cả các thực thể (Thỏ, Quái vật, Đạn...)"""
         self.player.update(self.SCREEN_WIDTH, self.SCREEN_HEIGHT)
+
+        # --- CẬP NHẬT CAMERA OFFSET ---
+        # Lấy tọa độ trung tâm của Thỏ trừ đi một nửa màn hình
+        self.camera_x = self.player.rect.centerx - (self.SCREEN_WIDTH // 2)
+        self.camera_y = self.player.rect.centery - (self.SCREEN_HEIGHT // 2)
+
         # Cập nhật Enemy di chuyển theo đường đã tìm
         self.enemy_group.update()
 
@@ -177,32 +222,75 @@ class GameLoop:
                     self.player.take_damage(bullet.damage)
                 bullet.kill() # Biến mất khi trúng người
 
-    def draw(self):
-        """Hàm render (vẽ) mọi thứ ra màn hình theo thứ tự Lớp (Layer)"""
-        self.screen.fill((0, 0, 0)) # B1: quét màn hình đen ( xóa frame cũ)    
-        self.map_loader.draw(self.screen) # B2: vẽ map (làm nền á)
-        self.player.draw(self.screen) # B3 vẽ nhân vật lên map
-        #Vẽ đường đi của quái
-        for enemy in self.enemy_group:
-            # Kiểm tra xem đây có phải là quái vật có thuật toán tìm đường không
-            if hasattr(enemy, 'path') and enemy.path and enemy.current_destination:
-                
-                # Tạo danh sách các điểm: Bắt đầu từ vị trí quái vật, nối với các điểm CHƯA ĐI QUA trong path
-                points = [(enemy.x, enemy.y)] + enemy.path[enemy.target_node_index:]
-                
-                if len(points) > 1:
-                    # Vẽ đường kẻ gấp khúc (screen, màu đỏ, false = không nối kín, list tọa độ, độ dày line)
-                    pygame.draw.lines(self.screen, (255, 255, 255), False, points, 2)
-                
-                # (Tùy chọn) Vẽ một dấu chấm tròn màu Xanh Lá Cây để đánh dấu đích đến cuối cùng
-                target_point = enemy.path[-1]
-                pygame.draw.circle(self.screen, (50, 255, 50), target_point, 6)
+        # Kiểm tra điều kiện Thắng (Thỏ chạm Cửa)
+        if self.player.rect.colliderect(self.exit_door.rect):
+            print("CHÚC MỪNG! BẠN ĐÃ TÌM THẤY CỬA THOÁT HIỂM!")
+            self.is_running = False # Tạm thời thoát game, mai mốt mình làm màn hình Win sau
 
-        self.enemy_group.draw(self.screen) # B4 vẽ Enemy
+        # Kiểm tra điều kiện Thua (Thỏ hết HP)
+        if self.player.health <= 0:
+            print("GAME OVER! BẠN ĐÃ BỊ ĐẠN BẮN CHẾT!")
+            self.is_running = False        
+
+    #def draw(self):
+        #"""Hàm render (vẽ) mọi thứ ra màn hình theo thứ tự Lớp (Layer)"""
+        #self.screen.fill((0, 0, 0)) # B1: quét màn hình đen ( xóa frame cũ)    
+        #self.map_loader.draw(self.screen) # B2: vẽ map (làm nền á)
+        #self.player.draw(self.screen) # B3 vẽ nhân vật lên map
+        #Vẽ đường đi của quái
+        #for enemy in self.enemy_group:
+        #    # Kiểm tra xem đây có phải là quái vật có thuật toán tìm đường không
+        #    if hasattr(enemy, 'path') and enemy.path and enemy.current_destination:
+        #        
+        #        # Tạo danh sách các điểm: Bắt đầu từ vị trí quái vật, nối với các điểm CHƯA ĐI QUA trong path
+        #        points = [(enemy.x, enemy.y)] + enemy.path[enemy.target_node_index:]
+        #        
+        #        if len(points) > 1:
+        #            # Vẽ đường kẻ gấp khúc (screen, màu đỏ, false = không nối kín, list tọa độ, độ dày line)
+        #            pygame.draw.lines(self.screen, (255, 255, 255), False, points, 2)
+        #        
+        #        # (Tùy chọn) Vẽ một dấu chấm tròn màu Xanh Lá Cây để đánh dấu đích đến cuối cùng
+        #        target_point = enemy.path[-1]
+        #        pygame.draw.circle(self.screen, (50, 255, 50), target_point, 6)
+        #
+        #self.enemy_group.draw(self.screen) # B4 vẽ Enemy
         #for bullet in self.bullet_spawner.get_enemies():
         #    self.screen.blit(bullet.image, bullet.rect)
+        #self._draw_health()
+        #pygame.display.flip() # đẩy lên màn hình hoi
+
+    def draw(self):
+        self.screen.fill((0, 0, 0)) # B1: quét màn hình đen
+        
+        # VẼ MAP VỚI CAMERA OFFSET
+        for tile in self.map_loader.sprite_group:
+            # Tính tọa độ hiển thị thật trên màn hình = Tọa độ gốc - Độ lệch Camera
+            screen_x = tile.rect.x - self.camera_x
+            screen_y = tile.rect.y - self.camera_y
+            self.screen.blit(tile.image, (screen_x, screen_y))
+            
+        # VẼ NHÂN VẬT (Thỏ luôn ở giữa màn hình)
+        player_screen_x = self.player.rect.x - self.camera_x
+        player_screen_y = self.player.rect.y - self.camera_y
+        self.screen.blit(self.player.image, (player_screen_x, player_screen_y))
+
+        # VẼ QUÁI VẬT (Cũng phải trừ đi offset của Camera)
+        for enemy in self.enemy_group:
+            # (Phần vẽ đường line DFS nếu bạn muốn giữ lại thì cũng phải trừ đi camera_x, camera_y ở từng point nhé)
+            # Tạm thời mình ẩn đường line đi cho giống game thật
+            enemy_screen_x = enemy.rect.x - self.camera_x
+            enemy_screen_y = enemy.rect.y - self.camera_y
+            self.screen.blit(enemy.image, (enemy_screen_x, enemy_screen_y))
+
         self._draw_health()
-        pygame.display.flip() # đẩy lên màn hình hoi
+
+        # VẼ CỬA THOÁT HIỂM
+        door_screen_x = self.exit_door.rect.x - self.camera_x
+        door_screen_y = self.exit_door.rect.y - self.camera_y
+        self.screen.blit(self.exit_door.image, (door_screen_x, door_screen_y))
+        
+        # câu lệnh chốt hết lại để vẽ vô pygame
+        pygame.display.flip()
 
     def _draw_health(self):
         font = pygame.font.Font(None, 36)
@@ -219,3 +307,26 @@ class GameLoop:
             
         pygame.quit()
         sys.exit()
+
+    def spawn_exit_door(self):
+        """Sinh Cửa Thoát Hiểm ở một vị trí ngẫu nhiên trên toàn Map"""
+        tile_size = self.scaled_tile_size
+        map_width = self.map_loader.tmx_data.width * tile_size
+        map_height = self.map_loader.tmx_data.height * tile_size
+
+        max_x = (map_width // tile_size) - 2
+        max_y = (map_height // tile_size) - 2
+
+        while True:
+            tx = random.randint(1, max_x)
+            ty = random.randint(1, max_y)
+            # Dùng logic dò tường của DFS để tìm ô trống
+            if self.pathfinder._is_valid((tx, ty)):
+                spawn_x = tx * tile_size
+                spawn_y = ty * tile_size
+
+                # Đảm bảo cửa không sinh ra ngay dưới chân người chơi
+                dist_to_player = ((spawn_x - self.player.x)**2 + (spawn_y - self.player.y)**2)**0.5
+                if dist_to_player > 300: # Cửa phải cách thỏ ít nhất 300px
+                    self.exit_door = ExitDoor(spawn_x, spawn_y, tile_size)
+                    break
