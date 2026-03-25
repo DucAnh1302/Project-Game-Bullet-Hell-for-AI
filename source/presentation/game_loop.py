@@ -242,6 +242,7 @@ class GameLoop:
 
         # Kiểm tra điều kiện Thắng (Thỏ chạm Cửa)
         if self.exit_door and self.player.rect.colliderect(self.exit_door.rect):
+            self.exit_door.open_door()  # Mở cửa khi player chạm vào
             if self.elapsed_time < self.best_time:
                 self.score_dal.save_best_time(self.elapsed_time)
             self.state = "WIN" # Đổi trạng thái thay vì thoát game
@@ -333,7 +334,7 @@ class GameLoop:
                 # Đảm bảo cửa không sinh ra ngay dưới chân người chơi
                 dist_to_player = ((spawn_x - self.player.x)**2 + (spawn_y - self.player.y)**2)**0.5
                 if dist_to_player > 300: # Cửa phải cách thỏ ít nhất 300px
-                    self.exit_door = ExitDoor(spawn_x, spawn_y, tile_size)
+                    self.exit_door = ExitDoor(spawn_x, spawn_y, tile_size, self.assets_path)
                     break
 
     def spawn_magic_eye(self):
@@ -348,5 +349,5 @@ class GameLoop:
             if self.pathfinder._is_valid((tx, ty)):
                 spawn_x = tx * tile_size
                 spawn_y = ty * tile_size
-                self.magic_eye = MagicEye(spawn_x, spawn_y, tile_size)
+                self.magic_eye = MagicEye(spawn_x, spawn_y, tile_size, assets_path=self.assets_path)
                 break

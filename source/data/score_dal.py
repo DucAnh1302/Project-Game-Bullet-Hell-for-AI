@@ -15,7 +15,7 @@ class ScoreDAL:
             return float('inf') # Chưa có ai chơi thì kỷ lục là vô cực
         
         try:
-            with open(self.file_path, 'r') as file:
+            with open(self.file_path, 'r', encoding='utf-8') as file:
                 return float(file.read().strip())
         except Exception as e:
             print(f"Lỗi đọc file kỷ lục: {e}")
@@ -24,7 +24,7 @@ class ScoreDAL:
     def save_best_time(self, time_in_seconds):
         """Ghi đè kỷ lục mới xuống file txt."""
         try:
-            with open(self.file_path, 'w') as file:
+            with open(self.file_path, 'w', encoding='utf-8') as file:
                 file.write(f"{time_in_seconds:.2f}")
         except Exception as e:
             print(f"Lỗi ghi file kỷ lục: {e}")

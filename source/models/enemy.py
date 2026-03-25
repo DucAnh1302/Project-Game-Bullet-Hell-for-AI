@@ -53,7 +53,7 @@ class BulletEnemy(pygame.sprite.Sprite):
     def load_image(self, assets_path):
         """Tải hình ảnh bullet dựa trên màu sắc được truyền vào"""
         # Ghép tên file dạng: source/assets/redBullet.png
-        filename = f"{self.color}Bullet.png"
+        filename = f"enemies/{self.color}Bullet.png"
         full_path = os.path.join(assets_path, filename)
         
         try:
@@ -75,19 +75,6 @@ class BulletEnemy(pygame.sprite.Sprite):
             elif self.color == 'purple': color_rgb = (128, 0, 128)
             
             pygame.draw.circle(self.image, color_rgb, (self.radius, self.radius), self.radius)
-
-    def _create_bullet_sprite(self):
-        """Tạo hình ảnh viên đạn hình tròn với màu đỏ"""
-        # Tạo surface hình vuông để vẽ hình tròn
-        size = self.radius * 2
-        self.image = pygame.Surface((size, size), pygame.SRCALPHA)
-        
-        # Vẽ viên đạn hình tròn màu đỏ
-        pygame.draw.circle(self.image, (255, 50, 50), (self.radius, self.radius), self.radius)
-        
-        # Tạo rect cho collision detection
-        self.rect = self.image.get_rect()
-        self.rect.center = (self.x, self.y)
     
     def update(self):
         """Cập nhật vị trí của viên đạn theo mỗi frame"""
