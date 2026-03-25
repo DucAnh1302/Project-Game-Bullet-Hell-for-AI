@@ -7,7 +7,7 @@ from data.map_loader import MapLoader # Tầng data: load file TMX á
 from data.score_dal import ScoreDAL
 from presentation.ui_manager import UIManager
 from models.player import Player # tầng bll: Logic của game mình á
-from models.enemy import PathfindingEnemy, BulletEnemySpawner
+from models.enemy import PathfindingEnemy
 from models.exit_door import ExitDoor
 from models.magic_eye import MagicEye
 from bll.collision_manager import CollisionManager # tầng models: Nhân vật của mình á
