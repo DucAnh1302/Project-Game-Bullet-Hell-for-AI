@@ -1,4 +1,5 @@
 # nơi sẽ chứa logic DFS
+import math
 import random
 import pygame
 import heapq
@@ -97,8 +98,12 @@ class AStarPathfinder:
         self.tile_size = tile_size
 
     def heuristic(self, a, b):
-        """Hàm khoảng cách Manhattan để tính toán chi phí ước tính đến đích"""
-        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+        #4 hướng
+        #"""Hàm khoảng cách Manhattan để tính toán chi phí ước tính đến đích"""
+        #return abs(a[0] - b[0]) + abs(a[1] - b[1])
+        #8 hướng để di chuyển mượt hơn trên grid 
+        """Sử dụng khoảng cách Euclidean (Đường thẳng chim bay) thay vì Manhattan"""
+        return math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
 
     def get_path(self, start_pos, target_pos):
         """Tìm đường đi ngắn nhất từ start_pos đến target_pos bằng thuật toán A*"""
@@ -126,7 +131,13 @@ class AStarPathfinder:
             if current == target_node:
                 return self.reconstruct_path(came_from, current)
 
-            neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+            #neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)] #4 hướng nên tạm thời comment lại
+            
+            # Lấy 8 hướng (4 thẳng + 4 chéo)
+            neighbors = [
+                (0, 1), (0, -1), (1, 0), (-1, 0),  # Lên, Xuống, Trái, Phải
+                (1, 1), (1, -1), (-1, 1), (-1, -1) # Các hướng chéo
+            ]
             
             for dx, dy in neighbors:
                 neighbor = (current[0] + dx, current[1] + dy)
@@ -136,9 +147,11 @@ class AStarPathfinder:
                     continue
                     
                 # Khoảng cách giữa các ô lưới kề nhau mặc định là 1
-                tentative_g_score = g_score[current] + 1
+                # CHI PHÍ MỚI: Đi thẳng tốn 1, đi chéo tốn 1.414 (căn bậc 2 của 2)
+                step_cost = 1 if dx == 0 or dy == 0 else 1.414
+                tentative_g_score = g_score[current] + step_cost
 
-                # Nếu tìm được đường ngắn hơn để đến node hàng xóm này
+            # Nếu tìm được đường ngắn hơn để đến node hàng xóm này
                 if tentative_g_score < g_score.get(neighbor, float('inf')):
                     came_from[neighbor] = current
                     g_score[neighbor] = tentative_g_score
@@ -158,10 +171,10 @@ class AStarPathfinder:
             total_path.append(current)
             
         total_path.reverse() # A* truy vết từ đích ngược về nguồn nên cần đảo mảng lại
-        
+        smoothed_grid_path = self.smooth_path(total_path)
         # Chuyển đổi Grid sang tọa độ Pixel (tâm của ô)
         pixel_path = []
-        for node in total_path:
+        for node in smoothed_grid_path:
             px = node[0] * self.tile_size + self.tile_size // 2
             py = node[1] * self.tile_size + self.tile_size // 2
             pixel_path.append((px, py))
@@ -179,3 +192,49 @@ class AStarPathfinder:
                 return False
         rect = pygame.Rect(node[0] * self.tile_size, node[1] * self.tile_size, self.tile_size, self.tile_size)
         return not self.collision_manager.is_colliding(rect)
+    #PathSmoothing (làm mượt đường đi) để con A* đi mượt hơn
+    def _has_line_of_sight(self, start_node, end_node):
+        """
+        Phóng một tia nhìn (Raycast) từ ô bắt đầu đến ô kết thúc.
+        Nếu tia này chạm bất kỳ bức tường nào -> Trả về False (Không nhìn thấy)
+        """
+        x0, y0 = start_node
+        x1, y1 = end_node
+        
+        # Tính số bước lớn nhất cần kiểm tra (theo trục X hoặc Y)
+        steps = max(abs(x1 - x0), abs(y1 - y0))
+        if steps == 0:
+            return True
+            
+        x_step = (x1 - x0) / steps
+        y_step = (y1 - y0) / steps
+        
+        # Quét từng ô một dọc theo đường thẳng giữa 2 điểm
+        for i in range(1, steps):
+            check_x = int(round(x0 + i * x_step))
+            check_y = int(round(y0 + i * y_step))
+            
+            # Nếu 1 ô trung gian là tường (không hợp lệ) -> Bị khuất tầm nhìn
+            if not self._is_valid((check_x, check_y)):
+                return False
+                
+        return True
+
+    def smooth_path(self, grid_path):
+        """Lọc bỏ các điểm (waypoints) thừa để tạo đường đi thẳng nhất"""
+        if len(grid_path) <= 2:
+            return grid_path
+
+        smoothed_path = [grid_path[0]]
+        current_index = 0
+
+        # Quét cho đến khi chạm tới đích
+        while current_index < len(grid_path) - 1:
+            # Từ điểm hiện tại, quét ngược từ đích về xem điểm xa nhất nào có thể nhìn thấy
+            for i in range(len(grid_path) - 1, current_index, -1):
+                if self._has_line_of_sight(grid_path[current_index], grid_path[i]):
+                    smoothed_path.append(grid_path[i])
+                    current_index = i
+                    break
+                    
+        return smoothed_path

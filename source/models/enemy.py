@@ -1,8 +1,10 @@
+from turtle import distance
+
 import pygame
 import math
 import random
 import os
-
+from bll.pathfinding import DFSPathfinder, AStarPathfinder
 class BulletEnemy(pygame.sprite.Sprite):
     """
     Kẻ thù hình viên đạn gây sát thương khi chạm vào người chơi.
@@ -228,9 +230,9 @@ class PathfindingEnemy(BulletEnemy):
                 self.current_destination = self.path[self.target_node_index]
             else:
                 self.current_destination = None # Đã chạm đích cuối
-                self.kill() # Biến mất
+                # self.kill() sẽ được gọi ở frame tiếp theo trên đầu hàm
         else:
-            # Di chuyển từng frame
+            # DI CHUYỂN BẰNG VECTOR: Đi từng frame theo đúng góc đường thẳng
             self.x += (dx / distance) * self.speed
             self.y += (dy / distance) * self.speed
-            self.rect.center = (self.x, self.y)
+            self.rect.center = (int(self.x), int(self.y))

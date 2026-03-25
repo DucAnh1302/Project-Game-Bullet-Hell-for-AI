@@ -12,7 +12,7 @@ from models.enemy import PathfindingEnemy
 from models.exit_door import ExitDoor
 from models.magic_eye import MagicEye
 from bll.collision_manager import CollisionManager # tầng models: Nhân vật của mình á
-from bll.pathfinding import DFSPathfinder
+from bll.pathfinding import AStarPathfinder, DFSPathfinder
 
 class GameLoop:
     def __init__(self):
@@ -33,7 +33,11 @@ class GameLoop:
         # Đường dẫn linh hoạt cho mọi máy
         self.base_dir = os.path.dirname(os.path.dirname(__file__))
         self.assets_path = os.path.join(self.base_dir, 'assets')
-        self.map_path = os.path.join(self.assets_path, 'Map', 'level1.tmx')
+
+        # Danh sách các file map trong thư mục assets/Map/
+        self.level_files = ['level1.tmx', 'level2.tmx', 'level3.tmx']
+        self.current_level_index = 0
+        self.map_path = os.path.join(self.assets_path, 'Map', self.level_files[self.current_level_index])
 
         # TẦNG DATA: Tải dữ liệu Map và phóng to
         self.map_loader = MapLoader(self.SCREEN_WIDTH, self.SCREEN_HEIGHT)
@@ -46,7 +50,7 @@ class GameLoop:
         self.collision_manager = CollisionManager(self.map_loader.tmx_data, scale_factor)
         self.scaled_tile_size = int(16 * scale_factor)
         self.pathfinder = DFSPathfinder(self.collision_manager, tile_size=self.scaled_tile_size) 
-
+        self.astar_pathfinder = AStarPathfinder(self.collision_manager, self.scaled_tile_size)
         # KHỞI TẠO CÁC GROUP VÀ SURFACE CỐ ĐỊNH CHO RENDER
         self.enemy_group = pygame.sprite.Group()
         self.map_width = self.map_loader.tmx_data.width * self.scaled_tile_size
@@ -65,6 +69,33 @@ class GameLoop:
 
         # SỬA TRẠNG THÁI MẶC ĐỊNH THÀNH START MENU để chặn game ở menu chính
         self.state = "START" # Các trạng thái: "PLAYING", "GAME_OVER", "WIN"
+
+    def load_current_level(self):
+        """Đọc file TMX hiện tại, setup môi trường và làm mới vòng chơi"""
+        self.map_path = os.path.join(self.assets_path, 'Map', self.level_files[self.current_level_index])
+        
+        # TẦNG DATA: Tải dữ liệu Map và phóng to
+        self.map_loader = MapLoader(self.SCREEN_WIDTH, self.SCREEN_HEIGHT)
+        self.map_loader.load_map(self.map_path, scale_to_fit=False)
+        self.map_loader.set_zoom(self.zoom)
+
+        # LIÊN KẾT BLL VÀ MODELS
+        scale_factor = self.map_loader.scale_x * self.map_loader.zoom_level
+        self.collision_manager = CollisionManager(self.map_loader.tmx_data, scale_factor)
+        self.scaled_tile_size = int(16 * scale_factor)
+        
+        # Cập nhật lại bộ tìm đường cho map mới
+        self.pathfinder = DFSPathfinder(self.collision_manager, tile_size=self.scaled_tile_size) 
+        self.astar_pathfinder = AStarPathfinder(self.collision_manager, self.scaled_tile_size)
+
+        # KHỞI TẠO LẠI SURFACE CỐ ĐỊNH CHO RENDER
+        self.map_width = self.map_loader.tmx_data.width * self.scaled_tile_size
+        self.map_height = self.map_loader.tmx_data.height * self.scaled_tile_size
+        self.virtual_surface = pygame.Surface((self.map_width, self.map_height))
+
+        # Reset các biến trong game (Tạo thỏ, xóa quái, reset giờ...)
+        self.reset_game()
+
 
     def reset_game(self):
         """Khôi phục lại toàn bộ trạng thái ban đầu để Chơi lại (Restart)"""
@@ -112,6 +143,15 @@ class GameLoop:
                         self.reset_game()
                     elif event.key == pygame.K_ESCAPE: # Bấm ESC để thoát
                         self.is_running = False
+                    elif event.key == pygame.K_RETURN and self.state == "WIN":
+                        # Nếu vẫn còn map trong danh sách
+                        if self.current_level_index < len(self.level_files) - 1:
+                            self.current_level_index += 1  # Tăng lên map tiếp theo
+                            self.load_current_level()      # Tải map mới
+                            self.state = "PLAYING"         # Mở khóa chơi tiếp
+                        else:
+                            # Đã chơi qua tất cả các map!
+                            self.state = "GAME_CLEARED"    # Cần thêm trạng thái phá đảo vào UI
 
         # Chỉ cho phép điều khiển Camera (Zoom) và Thỏ khi đang PLAYING
         if self.state == "PLAYING":
@@ -128,7 +168,7 @@ class GameLoop:
 
     def spawn_random_enemy(self):
         """Spawn enemy ở vị trí hợp lệ TRONG KHUNG MÀN HÌNH"""
-        # ile_size = 32
+        # Tile_size = 32
         # --- FIX BUG: Sử dụng scaled_tile_size thay vì số 32 cố định ---
         tile_size = self.scaled_tile_size
         spawn_x, spawn_y = None, None
@@ -146,9 +186,6 @@ class GameLoop:
             # Chọn ô grid nằm trong màn hình hiển thị (từ ô số 1 để tránh sát viền)
             tx = random.randint(1, max_x)
             ty = random.randint(1, max_y)
-            # Đang lấy vị trí cố định để test, sau này đổi lại random nhé
-            # tx=2
-            # ty=2
             # Kiểm tra xem ô đó có hợp lệ (không dính tường) không
             if self.pathfinder._is_valid((tx, ty)):
                 spawn_x = tx * tile_size
@@ -179,21 +216,34 @@ class GameLoop:
         
         # --- KHỞI TẠO ENEMY VỚI MÀU MỚI VÀ ASSETS_PATH ---
         # Nhớ truyền self.assets_path vào nhé
-        new_enemy = PathfindingEnemy(
+        
+        DFS_enemy = PathfindingEnemy(
             spawn_x, spawn_y, 
             self.pathfinder, 
             self.assets_path, # Tham số mới
             speed=scaled_speed, 
             radius=scaled_radius, 
-            color=chosen_color # Tham số mới
+            #color=chosen_color # Tham số mới
+            color = 'blue' # DFS thì màu xanh biển, A* thì màu đỏ để dễ phân biệt
         )
-        new_enemy.set_collision_manager(self.collision_manager)
+        
+        Astar_enemy = PathfindingEnemy(
+            spawn_x, spawn_y, 
+            self.astar_pathfinder,
+            self.assets_path, # Tham số mới
+            speed=scaled_speed, 
+            radius=scaled_radius, 
+            color= 'red' # A* thì màu đỏ để dễ phân biệt
+        )
+        DFS_enemy.set_collision_manager(self.collision_manager)
+        Astar_enemy.set_collision_manager(self.collision_manager)
         
         map_width = self.map_loader.tmx_data.width * self.scaled_tile_size
         map_height = self.map_loader.tmx_data.height * self.scaled_tile_size
-        new_enemy.set_random_target(map_width, map_height, self.scaled_tile_size)
-        
-        self.enemy_group.add(new_enemy)
+        DFS_enemy.set_random_target(map_width, map_height, self.scaled_tile_size)
+        Astar_enemy.set_random_target(map_width, map_height, self.scaled_tile_size)
+        self.enemy_group.add(DFS_enemy)
+        self.enemy_group.add(Astar_enemy)
 
     def update(self):
         # NẾU GAME KẾT THÚC, ĐÓNG BĂNG MỌI THỨ, KHÔNG CẬP NHẬT LOGIC NỮA
@@ -267,7 +317,6 @@ class GameLoop:
         self.virtual_surface.blit(self.player.image, self.player.rect)
         self.enemy_group.draw(self.virtual_surface)
 
-        # Chiếu cuộn phim lên màn hình chính
         if self.is_eye_active:
             # Chế độ thu nhỏ toàn bản đồ
             scaled_view = pygame.transform.scale(self.virtual_surface, (self.SCREEN_WIDTH, self.SCREEN_HEIGHT))

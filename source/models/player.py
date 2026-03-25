@@ -78,7 +78,7 @@ class Player(pygame.sprite.Sprite):
 
         # Căn giữa hitbox theo chiều ngang, và ép nó xuống sát gót chân thỏ
         hitbox_x = new_x + (self.rect.width - hitbox_w) // 2
-        hitbox_y = new_y + self.rect.height - hitbox_h - 2 # Trừ đi 2 pixel để mượt hơn
+        hitbox_y = new_y + self.rect.height - hitbox_h - 2
         
         # Tạo khung ảo và ném sang cho BLL check xem có đụng tường không
         future_rect = pygame.Rect(hitbox_x, hitbox_y, hitbox_w, hitbox_h)
