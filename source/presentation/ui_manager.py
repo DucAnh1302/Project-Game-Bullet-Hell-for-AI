@@ -32,6 +32,18 @@ class UIManager:
             
         self.btn_rect = self.play_btn_img.get_rect()
 
+        # Khởi tạo nút Thoát (Tự tạo hình chữ nhật đỏ nếu không có ảnh)
+        quit_path = os.path.join(assets_path, 'Buttons', 'quitButton.png')
+        try:
+            self.quit_btn_img = pygame.image.load(quit_path).convert_alpha()
+            self.quit_btn_img = pygame.transform.scale(self.quit_btn_img, (150, 50))
+        except:
+            self.quit_btn_img = pygame.Surface((150, 50))
+            self.quit_btn_img.fill((200, 50, 50)) 
+            text = self.font_info.render("QUIT", True, (255, 255, 255))
+            self.quit_btn_img.blit(text, (self.quit_btn_img.get_width()//2 - text.get_width()//2, 15))
+        self.quit_btn_rect = self.quit_btn_img.get_rect()
+
     def draw_hud(self, screen, player_health, elapsed_time, best_time):
         """Vẽ thanh máu và đồng hồ trên cùng màn hình lúc đang chơi"""
         # Vẽ Máu
@@ -64,7 +76,15 @@ class UIManager:
             msg_text = self.font_info.render("Ban da bi dan ma thuat ban ha!", True, (200, 200, 200))
         elif state == "WIN":
             title_text = self.font_title.render("YOU WIN!", True, (50, 255, 50))
-            msg_text = self.font_info.render(f"Thoi gian thoat: {elapsed_time:.2f}s", True, (200, 200, 200))
+            # Thay đổi thông báo hướng dẫn người chơi
+            msg_text = self.font_info.render("Nhan ENTER de tiep tuc me cung tiep theo", True, (200, 200, 200))
+        elif state == "GAME_CLEARED":
+            title_text = self.font_title.render("CONGRATULATIONS!", True, (255, 215, 0)) # Màu vàng Gold
+            msg_text = self.font_info.render(f"Ban da pha dao toan bo me cung!", True, (255, 255, 255))
+        # VẼ MÀN HÌNH TẠM DỪNG
+        elif state == "PAUSED":
+            title_text = self.font_title.render("PAUSED", True, (255, 255, 255))
+            msg_text = self.font_info.render("Game dang tam dung", True, (200, 200, 200))
 
         inst_text = self.font_info.render("Hoac nhan [ESC] de thoat", True, (150, 150, 150))
 
@@ -79,8 +99,13 @@ class UIManager:
         screen.blit(msg_text, (self.width//2 - msg_text.get_width()//2, msg_y))
         
         # Cập nhật tọa độ nút và in nút
-        self.btn_rect.centerx = self.width // 2
+        #Đặt 2 nút nằm ngang cạnh nhau
+        self.btn_rect.centerx = self.width // 2 - 90
         self.btn_rect.centery = btn_y
         screen.blit(self.play_btn_img, self.btn_rect)
+
+        self.quit_btn_rect.centerx = self.width // 2 + 90
+        self.quit_btn_rect.centery = btn_y
+        screen.blit(self.quit_btn_img, self.quit_btn_rect)
 
         screen.blit(inst_text, (self.width//2 - inst_text.get_width()//2, inst_y))

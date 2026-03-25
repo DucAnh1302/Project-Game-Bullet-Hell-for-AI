@@ -51,6 +51,7 @@ class GameLoop:
         self.scaled_tile_size = int(16 * scale_factor)
         self.pathfinder = DFSPathfinder(self.collision_manager, tile_size=self.scaled_tile_size) 
         self.astar_pathfinder = AStarPathfinder(self.collision_manager, self.scaled_tile_size)
+        
         # KHỞI TẠO CÁC GROUP VÀ SURFACE CỐ ĐỊNH CHO RENDER
         self.enemy_group = pygame.sprite.Group()
         self.map_width = self.map_loader.tmx_data.width * self.scaled_tile_size
@@ -102,7 +103,13 @@ class GameLoop:
         scale_factor = self.map_loader.scale_x * self.map_loader.zoom_level
         
         # Reset Nhân vật (Máu đầy, về tọa độ gốc an toàn)
-        self.player = Player(120, 120, self.assets_path, scale=scale_factor)
+        #self.player = Player(120, 120, self.assets_path, scale=scale_factor)
+        # lắp tọa độ random
+        start_x, start_y = self.get_random_walkable_tile()
+        scale_factor = self.map_loader.scale_x * self.map_loader.zoom_level
+        self.player = Player(start_x, start_y, self.assets_path, scale=scale_factor)
+
+        # set collision
         self.player.set_collision_manager(self.collision_manager)
         
         # Xóa sạch đạn cũ và Camera
@@ -115,6 +122,9 @@ class GameLoop:
         self.spawn_magic_eye()
         self.is_eye_active = False
         
+        # KHỞI TẠO QUÂN SỐ THEO MÀN
+        self.maintain_enemies_count()
+
         # Reset Đồng hồ và load lại kỷ lục
         self.best_time = self.score_dal.load_best_time()
         self.start_time = pygame.time.get_ticks()
@@ -129,121 +139,210 @@ class GameLoop:
             if event.type == pygame.QUIT:
                 self.is_running = False
 
-            # Xử lý CLICK CHUỘT TRÁI vào nút Play/Retry
+            # Xử lý CLICK CHUỘT
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if self.state in ["START", "GAME_OVER", "WIN"]:
-                    # Nhờ UI Manager check xem chuột có click trúng nút không
+                # Nút bấm hoạt động ở MỌI màn hình chờ (bao gồm cả PAUSED)
+                if self.state in ["START", "GAME_OVER", "WIN", "GAME_CLEARED", "PAUSED"]:
+                    # Nếu nhấn nút Play / Resume
                     if self.ui_manager.btn_rect.collidepoint(event.pos):
-                        self.reset_game()
-
-            # Xử lý phím khi đang ở màn hình GAME OVER hoặc WIN
-            if event.type == pygame.KEYDOWN:
-                if self.state in ["GAME_OVER", "WIN"]:
-                    if event.key == pygame.K_r: # Bấm R để chơi lại
-                        self.reset_game()
-                    elif event.key == pygame.K_ESCAPE: # Bấm ESC để thoát
-                        self.is_running = False
-                    elif event.key == pygame.K_RETURN and self.state == "WIN":
-                        # Nếu vẫn còn map trong danh sách
-                        if self.current_level_index < len(self.level_files) - 1:
-                            self.current_level_index += 1  # Tăng lên map tiếp theo
-                            self.load_current_level()      # Tải map mới
-                            self.state = "PLAYING"         # Mở khóa chơi tiếp
+                        if self.state == "WIN":
+                            if self.current_level_index < len(self.level_files) - 1:
+                                self.current_level_index += 1  
+                                self.load_current_level()      
+                                self.state = "PLAYING"         
+                            else:
+                                self.state = "GAME_CLEARED" 
+                        elif self.state == "PAUSED":
+                            self.state = "PLAYING" # Bấm Play khi đang Pause -> Chơi tiếp
                         else:
-                            # Đã chơi qua tất cả các map!
-                            self.state = "GAME_CLEARED"    # Cần thêm trạng thái phá đảo vào UI
+                            self.reset_game()
+                            
+                    # Nếu nhấn nút Quit (Luôn luôn bấm được)
+                    elif hasattr(self.ui_manager, 'quit_btn_rect') and self.ui_manager.quit_btn_rect.collidepoint(event.pos):
+                        self.is_running = False
 
-        # Chỉ cho phép điều khiển Camera (Zoom) và Thỏ khi đang PLAYING
+            # Xử lý NHẤN PHÍM BÀN PHÍM
+            if event.type == pygame.KEYDOWN:
+                # Tính năng TẠM DỪNG (PAUSE)
+                if event.key == pygame.K_p or event.key == pygame.K_ESCAPE:
+                    if self.state == "PLAYING":
+                        self.state = "PAUSED"
+                    elif self.state == "PAUSED":
+                        self.state = "PLAYING"
+                        
+                if self.state in ["GAME_OVER", "WIN"]:
+                    if event.key == pygame.K_r: 
+                        self.reset_game()
+                    elif event.key == pygame.K_RETURN and self.state == "WIN":
+                        if self.current_level_index < len(self.level_files) - 1:
+                            self.current_level_index += 1  
+                            self.load_current_level()      
+                            self.state = "PLAYING"         
+                        else:
+                            self.state = "GAME_CLEARED" 
+
+        # Zoom bản đồ khi đang chơi
         if self.state == "PLAYING":
             keys = pygame.key.get_pressed()
             old_zoom = self.zoom
             
             if keys[pygame.K_EQUALS] or keys[pygame.K_PLUS]:
-                self.zoom = min(self.zoom + self.zoom_step, 3.0)
+                self.zoom = min(self.zoom + 0.1, 3.0) # zoom_step = 0.1
             if keys[pygame.K_MINUS]:
-                self.zoom = max(self.zoom - self.zoom_step, 0.3)
+                self.zoom = max(self.zoom - 0.1, 0.3)
             
             if self.zoom != old_zoom:
                 self.map_loader.set_zoom(self.zoom)
 
-    def spawn_random_enemy(self):
-        """Spawn enemy ở vị trí hợp lệ TRONG KHUNG MÀN HÌNH"""
-        # Tile_size = 32
-        # --- FIX BUG: Sử dụng scaled_tile_size thay vì số 32 cố định ---
-        tile_size = self.scaled_tile_size
-        spawn_x, spawn_y = None, None
+    # các hàm mới thay cho spawn_random_enemy cũ bên dưới nha
+    def maintain_enemies_count(self):
+        """Duy trì đúng số lượng AI mỗi màn. Con nào chết sẽ được đẻ bù ngay."""
+        level_index = self.current_level_index
         
-        # Lấy kích thước thật của toàn bộ Map (không bị giới hạn bởi 800x600 nữa)
-        map_width = self.map_loader.tmx_data.width * tile_size
-        map_height = self.map_loader.tmx_data.height * tile_size
+        # Thiết lập số lượng AI tương ứng với từng màn
+        if level_index == 0:
+            target_dfs, target_astar = 4, 0
+        elif level_index == 1:
+            target_dfs, target_astar = 5, 2
+        else: # Màn 3
+            target_dfs, target_astar = 5, 5
+            
+        current_dfs = 0
+        current_astar = 0
+        # Kiểm đếm số AI đang có mặt trên bản đồ
+        for e in self.enemy_group:
+            if e.color == 'blue': current_dfs += 1
+            elif e.color == 'red': current_astar += 1
+            
+        map_w = self.map_loader.tmx_data.width * self.scaled_tile_size
+        map_h = self.map_loader.tmx_data.height * self.scaled_tile_size
+        scale_factor = self.map_loader.scale_x * self.map_loader.zoom_level
+        
+        # Nếu thiếu DFS (Xanh dương), đẻ thêm
+        while current_dfs < target_dfs:
+            speed = int(2 * scale_factor)
+            radius = int(6 * scale_factor)
+            self.spawn_single_enemy(map_w, map_h, speed, radius, 'blue', 'dfs')
+            current_dfs += 1
+            
+        # Nếu thiếu A* (Đỏ), đẻ thêm (A* to hơn và đi lanh hơn xíu)
+        while current_astar < target_astar:
+            speed = int(2.5 * scale_factor) # A* đi chéo nên speed để 2.5 là cân bằng
+            radius = int(8 * scale_factor)
+            self.spawn_single_enemy(map_w, map_h, speed, radius, 'red', 'astar')
+            current_astar += 1
 
-        # Giới hạn vùng tìm kiếm bằng đúng kích thước cửa sổ game (800x600)
-        # Cộng trừ thêm padding để Enemy không dính mép màn hình
-        max_x = (map_width // tile_size) - 2
-        max_y = (map_height // tile_size) - 2
-
+    def spawn_single_enemy(self, map_w, map_h, speed, radius, color, pathfinding_type):
+        """Hàm helper sinh 1 con kẻ thù tại vị trí random"""
+        tile_size = self.scaled_tile_size
+        max_x = (map_w // tile_size) - 2
+        max_y = (map_h // tile_size) - 2
+        
+        spawn_x, spawn_y = 300, 300 # Vị trí an toàn dự phòng
         for _ in range(500):
-            # Chọn ô grid nằm trong màn hình hiển thị (từ ô số 1 để tránh sát viền)
             tx = random.randint(1, max_x)
             ty = random.randint(1, max_y)
-            # Kiểm tra xem ô đó có hợp lệ (không dính tường) không
             if self.pathfinder._is_valid((tx, ty)):
-                spawn_x = tx * tile_size
-                spawn_y = ty * tile_size
+                #spawn_x = tx * tile_size
+                #spawn_y = ty * tile_size
+                spawn_x = (tx * tile_size) + (tile_size // 2)
+                spawn_y = (ty * tile_size) + (tile_size // 2)
                 break
         
-        # Nếu không tìm được chỗ nào thì fallback về vị trí an toàn giữa màn hình
-        if spawn_x is None:
-            spawn_x = 300 
-            spawn_y = 300 
+        # Chọn não cho AI
+        brain = self.astar_pathfinder if pathfinding_type == 'astar' else self.pathfinder
         
-        # Tính toán độ to và tốc độ của viên đạn theo Map
-        scale_factor = self.map_loader.scale_x * self.map_loader.zoom_level
-        scaled_speed = int(2 * scale_factor)
-        scaled_radius = int(8 * scale_factor)
-        
-        # --- RANDOM MÀU ĐẠN KHÔNG TRÙNG LẶP ---
-        all_colors = ['red', 'blue', 'green', 'purple']
-        # Lấy danh sách các màu đã được sử dụng bởi đạn trên bản đồ
-        used_colors = [e.color for e in self.enemy_group] 
-        # Chỉ giữ lại các màu chưa được dùng
-        available_colors = [c for c in all_colors if c not in used_colors]
-        
-        if not available_colors: 
-            available_colors = all_colors # Fallback an toàn nếu lỡ sinh > 4 viên
+        enemy = PathfindingEnemy(
+            spawn_x, spawn_y, 
+            brain, 
+            self.assets_path, 
+            speed=speed, 
+            radius=radius, 
+            color=color
+        )
             
-        chosen_color = random.choice(available_colors)
-        
-        # --- KHỞI TẠO ENEMY VỚI MÀU MỚI VÀ ASSETS_PATH ---
-        # Nhớ truyền self.assets_path vào nhé
-        
-        DFS_enemy = PathfindingEnemy(
-            spawn_x, spawn_y, 
-            self.pathfinder, 
-            self.assets_path, # Tham số mới
-            speed=scaled_speed, 
-            radius=scaled_radius, 
-            #color=chosen_color # Tham số mới
-            color = 'blue' # DFS thì màu xanh biển, A* thì màu đỏ để dễ phân biệt
-        )
-        
-        Astar_enemy = PathfindingEnemy(
-            spawn_x, spawn_y, 
-            self.astar_pathfinder,
-            self.assets_path, # Tham số mới
-            speed=scaled_speed, 
-            radius=scaled_radius, 
-            color= 'red' # A* thì màu đỏ để dễ phân biệt
-        )
-        DFS_enemy.set_collision_manager(self.collision_manager)
-        Astar_enemy.set_collision_manager(self.collision_manager)
-        
-        map_width = self.map_loader.tmx_data.width * self.scaled_tile_size
-        map_height = self.map_loader.tmx_data.height * self.scaled_tile_size
-        DFS_enemy.set_random_target(map_width, map_height, self.scaled_tile_size)
-        Astar_enemy.set_random_target(map_width, map_height, self.scaled_tile_size)
-        self.enemy_group.add(DFS_enemy)
-        self.enemy_group.add(Astar_enemy)
+        enemy.set_collision_manager(self.collision_manager)
+        enemy.set_random_target(map_w, map_h, tile_size)
+        self.enemy_group.add(enemy)
+
+    #def spawn_random_enemy(self):
+    #    """Spawn enemy ở vị trí hợp lệ TRONG KHUNG MÀN HÌNH"""
+    #    # Tile_size = 32
+    #    # --- FIX BUG: Sử dụng scaled_tile_size thay vì số 32 cố định ---
+    #    tile_size = self.scaled_tile_size
+    #    spawn_x, spawn_y = None, None
+    #    
+    #    # Lấy kích thước thật của toàn bộ Map (không bị giới hạn bởi 800x600 nữa)
+    #    map_width = self.map_loader.tmx_data.width * tile_size
+    #    map_height = self.map_loader.tmx_data.height * tile_size
+#
+    #    # Giới hạn vùng tìm kiếm bằng đúng kích thước cửa sổ game (800x600)
+    #    # Cộng trừ thêm padding để Enemy không dính mép màn hình
+    #    max_x = (map_width // tile_size) - 2
+    #    max_y = (map_height // tile_size) - 2
+#
+    #    for _ in range(500):
+    #        # Chọn ô grid nằm trong màn hình hiển thị (từ ô số 1 để tránh sát viền)
+    #        tx = random.randint(1, max_x)
+    #        ty = random.randint(1, max_y)
+    #        # Kiểm tra xem ô đó có hợp lệ (không dính tường) không
+    #        if self.pathfinder._is_valid((tx, ty)):
+    #            spawn_x = tx * tile_size
+    #            spawn_y = ty * tile_size
+    #            break
+    #    
+    #    # Nếu không tìm được chỗ nào thì fallback về vị trí an toàn giữa màn hình
+    #    if spawn_x is None:
+    #        spawn_x = 300 
+    #        spawn_y = 300 
+    #    
+    #    # Tính toán độ to và tốc độ của viên đạn theo Map
+    #    scale_factor = self.map_loader.scale_x * self.map_loader.zoom_level
+    #    scaled_speed = int(2 * scale_factor)
+    #    scaled_radius = int(8 * scale_factor)
+    #    
+    #    # --- RANDOM MÀU ĐẠN KHÔNG TRÙNG LẶP ---
+    #    all_colors = ['red', 'blue', 'green', 'purple']
+    #    # Lấy danh sách các màu đã được sử dụng bởi đạn trên bản đồ
+    #    used_colors = [e.color for e in self.enemy_group] 
+    #    # Chỉ giữ lại các màu chưa được dùng
+    #    available_colors = [c for c in all_colors if c not in used_colors]
+    #    
+    #    if not available_colors: 
+    #        available_colors = all_colors # Fallback an toàn nếu lỡ sinh > 4 viên
+    #        
+    #    chosen_color = random.choice(available_colors)
+    #    
+    #    # --- KHỞI TẠO ENEMY VỚI MÀU MỚI VÀ ASSETS_PATH ---
+    #    # Nhớ truyền self.assets_path vào nhé
+    #    
+    #    DFS_enemy = PathfindingEnemy(
+    #        spawn_x, spawn_y, 
+    #        self.pathfinder, 
+    #        self.assets_path, # Tham số mới
+    #        speed=scaled_speed, 
+    #        radius=scaled_radius, 
+    #        #color=chosen_color # Tham số mới
+    #        color = 'blue' # DFS thì màu xanh biển, A* thì màu đỏ để dễ phân biệt
+    #    )
+    #    
+    #    Astar_enemy = PathfindingEnemy(
+    #        spawn_x, spawn_y, 
+    #        self.astar_pathfinder,
+    #        self.assets_path, # Tham số mới
+    #        speed=scaled_speed, 
+    #        radius=scaled_radius, 
+    #        color= 'red' # A* thì màu đỏ để dễ phân biệt
+    #    )
+    #    DFS_enemy.set_collision_manager(self.collision_manager)
+    #    Astar_enemy.set_collision_manager(self.collision_manager)
+    #    
+    #    map_width = self.map_loader.tmx_data.width * self.scaled_tile_size
+    #    map_height = self.map_loader.tmx_data.height * self.scaled_tile_size
+    #    DFS_enemy.set_random_target(map_width, map_height, self.scaled_tile_size)
+    #    Astar_enemy.set_random_target(map_width, map_height, self.scaled_tile_size)
+    #    self.enemy_group.add(DFS_enemy)
+    #    self.enemy_group.add(Astar_enemy)
 
     def update(self):
         # NẾU GAME KẾT THÚC, ĐÓNG BĂNG MỌI THỨ, KHÔNG CẬP NHẬT LOGIC NỮA
@@ -258,12 +357,23 @@ class GameLoop:
         self.camera_x = self.player.rect.centerx - (self.SCREEN_WIDTH // 2)
         self.camera_y = self.player.rect.centery - (self.SCREEN_HEIGHT // 2)
 
+        # Fix viền đen: Nếu map nhỏ hơn màn hình thì Căn Giữa, nếu lớn hơn thì Khóa viền
+        if self.map_width < self.SCREEN_WIDTH:
+            self.camera_x = -(self.SCREEN_WIDTH - self.map_width) // 2
+        else:
+            self.camera_x = max(0, min(self.camera_x, self.map_width - self.SCREEN_WIDTH))
+            
+        if self.map_height < self.SCREEN_HEIGHT:
+            self.camera_y = -(self.SCREEN_HEIGHT - self.map_height) // 2
+        else:
+            self.camera_y = max(0, min(self.camera_y, self.map_height - self.SCREEN_HEIGHT))
+
         # Cập nhật Enemy di chuyển theo đường đã tìm
         self.enemy_group.update()
 
         # Để vòng while, khi bé hơn số lượng mình muốn thì spawn ra
-        while len(self.enemy_group) < 4:
-            self.spawn_random_enemy()
+        #while len(self.enemy_group) < 4:
+        #    self.spaw_random_enemy()
 
         # Quản lý thời gian spawn đạn
         #self.bullet_spawn_timer += 1
@@ -377,8 +487,10 @@ class GameLoop:
             ty = random.randint(1, max_y)
             # Dùng logic dò tường của DFS để tìm ô trống
             if self.pathfinder._is_valid((tx, ty)):
-                spawn_x = tx * tile_size
-                spawn_y = ty * tile_size
+                #spawn_x = tx * tile_size
+                #spawn_y = ty * tile_size
+                spawn_x = (tx * tile_size) + (tile_size // 2)
+                spawn_y = (ty * tile_size) + (tile_size // 2)
 
                 # Đảm bảo cửa không sinh ra ngay dưới chân người chơi
                 dist_to_player = ((spawn_x - self.player.x)**2 + (spawn_y - self.player.y)**2)**0.5
@@ -396,7 +508,33 @@ class GameLoop:
             tx = random.randint(1, max_x)
             ty = random.randint(1, max_y)
             if self.pathfinder._is_valid((tx, ty)):
-                spawn_x = tx * tile_size
-                spawn_y = ty * tile_size
+                #spawn_x = tx * tile_size
+                #spawn_y = ty * tile_size
+                spawn_x = (tx * tile_size) + (tile_size // 2)
+                spawn_y = (ty * tile_size) + (tile_size // 2)
                 self.magic_eye = MagicEye(spawn_x, spawn_y, tile_size, assets_path=self.assets_path)
                 break
+    
+    def get_random_walkable_tile(self):
+        """Lấy ngẫu nhiên tọa độ một ô lưới không phải tường để đặt nhân vật"""
+        tmx_data = self.map_loader.tmx_data
+        width = tmx_data.width
+        height = tmx_data.height
+        
+        while True:
+            # Random tọa độ ô (tile coordinates)
+            tx = random.randint(1, width - 2)
+            ty = random.randint(1, height - 2)
+            
+            while True:
+                # Random tọa độ ô (tile coordinates)
+                tx = random.randint(1, width - 2)
+                ty = random.randint(1, height - 2)
+                
+                # Sử dụng hàm dò đường để tự check va chạm tường 
+                # (Hàm này xử lý hoàn hảo cả Tile Layer lẫn Object Group của Map 2, 3)
+                if self.pathfinder._is_valid((tx, ty)):
+                    # Trả về tọa độ pixel thực tế trên màn hình (đã nhân scale)
+                    #return tx * self.scaled_tile_size, ty * self.scaled_tile_size
+                    # THỬ CỘNG 4 PIXEL ĐỂ THỎ KHÔNG BỊ LẸM SANG TƯỜNG
+                    return (tx * self.scaled_tile_size) + 4, (ty * self.scaled_tile_size) + 4

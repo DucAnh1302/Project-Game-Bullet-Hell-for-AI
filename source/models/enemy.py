@@ -55,7 +55,7 @@ class BulletEnemy(pygame.sprite.Sprite):
     def load_image(self, assets_path):
         """Tải hình ảnh bullet dựa trên màu sắc được truyền vào"""
         # Ghép tên file dạng: source/assets/redBullet.png
-        filename = f"enemies/{self.color}Bullet.png"
+        filename = f"Enemies/{self.color}Bullet.png"
         full_path = os.path.join(assets_path, filename)
         
         try:
