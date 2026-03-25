@@ -162,15 +162,35 @@ class GameLoop:
         # Tính toán độ to và tốc độ của viên đạn theo Map
         scale_factor = self.map_loader.scale_x * self.map_loader.zoom_level
         scaled_speed = int(2 * scale_factor)
-        scaled_radius = int(6 * scale_factor)
+        scaled_radius = int(8 * scale_factor)
         
-        # Khởi tạo Enemy với độ to mới
-        new_enemy = PathfindingEnemy(spawn_x, spawn_y, self.pathfinder, speed=scaled_speed, radius=scaled_radius)
+        # --- RANDOM MÀU ĐẠN KHÔNG TRÙNG LẶP ---
+        all_colors = ['red', 'blue', 'green', 'purple']
+        # Lấy danh sách các màu đã được sử dụng bởi đạn trên bản đồ
+        used_colors = [e.color for e in self.enemy_group] 
+        # Chỉ giữ lại các màu chưa được dùng
+        available_colors = [c for c in all_colors if c not in used_colors]
+        
+        if not available_colors: 
+            available_colors = all_colors # Fallback an toàn nếu lỡ sinh > 4 viên
+            
+        chosen_color = random.choice(available_colors)
+        
+        # --- KHỞI TẠO ENEMY VỚI MÀU MỚI VÀ ASSETS_PATH ---
+        # Nhớ truyền self.assets_path vào nhé
+        new_enemy = PathfindingEnemy(
+            spawn_x, spawn_y, 
+            self.pathfinder, 
+            self.assets_path, # Tham số mới
+            speed=scaled_speed, 
+            radius=scaled_radius, 
+            color=chosen_color # Tham số mới
+        )
         new_enemy.set_collision_manager(self.collision_manager)
-
-
-        # Truyền luôn SCREEN_WIDTH và SCREEN_HEIGHT để Enemy tìm đích đến trong màn hình
-        new_enemy.set_random_target(map_width, map_height, tile_size)
+        
+        map_width = self.map_loader.tmx_data.width * self.scaled_tile_size
+        map_height = self.map_loader.tmx_data.height * self.scaled_tile_size
+        new_enemy.set_random_target(map_width, map_height, self.scaled_tile_size)
         
         self.enemy_group.add(new_enemy)
 

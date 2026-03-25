@@ -1,13 +1,15 @@
 import pygame
 import math
 import random
+import os
+
 class BulletEnemy(pygame.sprite.Sprite):
     """
     Kẻ thù hình viên đạn gây sát thương khi chạm vào người chơi.
     Tầng Models: Chỉ chứa dữ liệu, trạng thái (tọa độ, vận tốc, hình dạng) của kẻ thù.
     """
     
-    def __init__(self, x, y, direction_x, direction_y, speed=3, radius=6,damage=10):
+    def __init__(self, x, y, direction_x, direction_y, assets_path, speed=3, radius=6, damage=10, color='red'):
         """
         Args:
             x: Tọa độ X ban đầu
@@ -17,6 +19,7 @@ class BulletEnemy(pygame.sprite.Sprite):
             speed: Tốc độ di chuyển (pixel/frame)
             radius: Bán kính của viên đạn (pixel)
             damage: Lượng sát thương gây ra (HP)
+            color: đổi màu cho đẹp
         """
         super().__init__()
         
@@ -26,7 +29,11 @@ class BulletEnemy(pygame.sprite.Sprite):
         self.speed = speed
         self.radius = radius
         self.damage = damage
+        self.color = color
         
+        # TẢI ẢNH THEO MÀU NGAY TỪ ĐẦU
+        self.load_image(assets_path)
+
         # Normalize hướng di chuyển
         magnitude = math.sqrt(direction_x**2 + direction_y**2)
         if magnitude > 0:
@@ -35,13 +42,40 @@ class BulletEnemy(pygame.sprite.Sprite):
         else:
             self.velocity_x = 0
             self.velocity_y = 0
-        
-        # Tạo hình tròn cho viên đạn
-        self._create_bullet_sprite()
+                
+        # Tạo rect cho collision detection dựa trên ảnh vừa tải
+        self.rect = self.image.get_rect()
+        self.rect.center = (self.x, self.y)
         
         # Collision manager (sẽ được set từ GameLoop)
         self.collision_manager = None
     
+    def load_image(self, assets_path):
+        """Tải hình ảnh bullet dựa trên màu sắc được truyền vào"""
+        # Ghép tên file dạng: source/assets/redBullet.png
+        filename = f"{self.color}Bullet.png"
+        full_path = os.path.join(assets_path, filename)
+        
+        try:
+            # Tải ảnh gốc
+            loaded_img = pygame.image.load(full_path).convert_alpha()
+            
+            # Scale ảnh cho khớp với bán kính radius (kích thước ảnh = radius * 2)
+            target_size = self.radius * 2
+            self.image = pygame.transform.scale(loaded_img, (target_size, target_size))
+            
+        except Exception as e:
+            # Nếu lỗi tải ảnh, vẽ hình tròn dự phòng (fallback)
+            print(f"Lỗi tải ảnh đạn {full_path}: {e}")
+            self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
+            # Vẽ màu dự phòng theo tên
+            color_rgb = (255, 0, 0) # Red
+            if self.color == 'blue': color_rgb = (0, 0, 255)
+            elif self.color == 'green': color_rgb = (0, 255, 0)
+            elif self.color == 'purple': color_rgb = (128, 0, 128)
+            
+            pygame.draw.circle(self.image, color_rgb, (self.radius, self.radius), self.radius)
+
     def _create_bullet_sprite(self):
         """Tạo hình ảnh viên đạn hình tròn với màu đỏ"""
         # Tạo surface hình vuông để vẽ hình tròn
@@ -159,10 +193,9 @@ class BulletEnemySpawner:
 
 
 class PathfindingEnemy(BulletEnemy):
-    # Thêm radius=6 vào tham số
-    def __init__(self, x, y, pathfinder, speed=2, radius=6):
-        # Thêm radius để xử lý việc vẽ hình tròn
-        super().__init__(x, y, 0, 0, speed,radius=radius)
+    def __init__(self, x, y, pathfinder, assets_path, speed=2, radius=6, color='red'):
+        # Truyền 0, 0 cho direction_x và direction_y, sau đó mới tới assets_path
+        super().__init__(x, y, 0, 0, assets_path, speed=speed, radius=radius, color=color) 
         self.pathfinder = pathfinder
         self.path = []
         self.target_node_index = 0
